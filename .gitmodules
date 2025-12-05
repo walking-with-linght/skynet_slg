@@ -1,32 +1,31 @@
+
 [submodule "skynet"]
 	path = skynet
 	url = https://github.com/cloudwu/skynet.git
-	branch = v1.8.0
-[submodule "3rd/lua-openssl"]
-	path = 3rd/lua-openssl
+[submodule "3rd/src-c/lua-openssl"]
+	path = 3rd/src-c/lua-openssl
 	url = https://github.com/zhaozg/lua-openssl.git
-    branch = v0.10.1
-[submodule "3rd/lua-rand"]
-    path = 3rd/lua-rand
-    url = https://github.com/walking-with-linght/lua-rand.git
-[submodule "3rd/lua-cjson"]
-    path = 3rd/lua-cjson
-    url = https://github.com/walking-with-linght/lua-cjson.git
-[submodule "3rd/lua-base64"]
-    path = 3rd/lua-base64
-    url = https://github.com/walking-with-linght/lua-base64.git
-[submodule "3rd/lua-tz"]
-    path = 3rd/lua-tz
-    url = https://github.com/walking-with-linght/lua-tz.git
-[submodule "3rd/lua-crypt"]
-    path = 3rd/lua-crypt
-    url = https://gitee.com/jslonely/lua-crypt.git
-[submodule "3rd/lua-protobuf"]
-    path = 3rd/lua-protobuf
-    url = https://github.com/starwing/lua-protobuf.git
-[submodule "3rd/lua-lfs"]
-    path = 3rd/lua-lfs
-    url = https://github.com/lunarmodules/luafilesystem.git
-[submodule "3rd/lua-consistent-hash"]  
-    path = 3rd/lua-consistent-hash
-    url = https://github.com/walking-with-linght/lua-consistent-hash.git
+[submodule "3rd/src-c/lua-rand"]
+	path = 3rd/src-c/lua-rand
+	url = https://github.com/walking-with-linght/lua-rand.git
+[submodule "3rd/src-c/lua-cjson"]
+	path = 3rd/src-c/lua-cjson
+	url = https://github.com/walking-with-linght/lua-cjson.git
+[submodule "3rd/src-c/lua-tz"]
+	path = 3rd/src-c/lua-tz
+	url = https://github.com/walking-with-linght/lua-tz.git
+[submodule "3rd/src-c/lua-crypt"]
+	path = 3rd/src-c/lua-crypt
+	url = https://gitee.com/jslonely/lua-crypt.git
+[submodule "3rd/src-c/lua-protobuf"]
+	path = 3rd/src-c/lua-protobuf
+	url = https://github.com/starwing/lua-protobuf.git
+[submodule "3rd/src-c/lua-lfs"]
+	path = 3rd/src-c/lua-lfs
+	url = https://github.com/lunarmodules/luafilesystem.git
+[submodule "3rd/src-c/ua-consistent-hash"]
+	path = 3rd/src-c/ua-consistent-hash
+	url = https://github.com/walking-with-linght/lua-consistent-hash.git
+[submodule "3rd/src-c/lua-consistent-hash"]
+	path = 3rd/src-c/lua-consistent-hash
+	url = https://github.com/walking-with-linght/lua-consistent-hash.git

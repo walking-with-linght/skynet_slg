@@ -24,7 +24,7 @@ endif
 JE_MALLOC_INC := $(SKYNET_ROOT)3rd/jemalloc/include/jemalloc
 JE_MALLOC_LIB := $(SKYNET_ROOT)3rd/jemalloc/lib/libjemalloc_pic.a
 
-MCSERVICE = skiplist time aoi
+MCSERVICE = skiplist time aoi rand openssl cjson tz lcrypt pb consistenthash lfs
 all :  $(foreach v, $(MCSERVICE), $(MCSERVICE_PATH)$(v).so) \
 	$(MCSERVICE_PATH)lutil.so \
 	$(MCSERVICE_PATH)lkcp.so \
@@ -60,7 +60,10 @@ $(MCSERVICE_PATH)utf8.so : $(SRC_DIR)/lua-utf8.c | $(MCSERVICE_PATH)
 $(MCSERVICE_PATH)crab.so : $(SRC_DIR)/lua-crab.c | $(MCSERVICE_PATH)
 	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
 
-$(MCSERVICE_PATH)lfs.so : $(SRC_DIR)/luafilesystem/src/lfs.c | $(MCSERVICE_PATH)
+$(MCSERVICE_PATH)lfs.so : $(SRC_DIR)/lua-lfs/src/lfs.c | $(MCSERVICE_PATH)
+	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
+
+$(MCSERVICE_PATH)rand.so : $(SRC_DIR)/lua-rand/rand.c | $(MCSERVICE_PATH)
 	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
 
 clean :
