@@ -5,7 +5,7 @@
 [submodule "3rd/lua-openssl"]
 	path = 3rd/lua-openssl
 	url = https://github.com/zhaozg/lua-openssl.git
-    branch = 0.10.1
+    branch = v0.10.1
 [submodule "3rd/lua-rand"]
     path = 3rd/lua-rand
     url = https://github.com/walking-with-linght/lua-rand.git
