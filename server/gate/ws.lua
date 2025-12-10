@@ -95,15 +95,11 @@ function CMD.start( conf)
         local s = DATA.ws_agents[i]
         skynet.call(s, "lua", "start", skynet.self(),"ws_client",conf)
     end
-    print("ws_agents",#DATA.ws_agents)
     local address = conf.address or "0.0.0.0"
     local port = assert(conf.port)
     protocol = conf.protocol or "ws"
-    print("address",address,port)
     local _fd = socket.listen(address, port)
-    print("socket.listen",_fd)
     rlog(string.format("Listen websocket port:%s protocol:%s", port, protocol))
-    print("Listen websocket port:", port, "protocol:", protocol)
     socket.start(_fd, function(fd, addr)
         if client_number > maxclient then
             error("client_number max" .. client_number .. ":" .. maxclient)

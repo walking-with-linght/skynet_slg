@@ -26,16 +26,6 @@ skynet.start(function()
 	})
 
     
-    local port = skynet.getenv("slgwebport")
-    --开启web服务
-	local http_watchdog = skynet.newservice("http_watchdog")
-	skynet.send(http_watchdog,"lua","start",{
-		protocol = "http",
-		agent_cnt = 5,
-		port = port,
-		handle = "slg_login"
-	})
-
 	skynet.newservice("msg_manager")
 
 

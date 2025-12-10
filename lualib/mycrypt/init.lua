@@ -10,39 +10,39 @@ local crypt = {
 }
 
 -- UUID与GUID
-require "crypt.id"(crypt)
+require "mycrypt.id"(crypt)
 
 -- 安全哈希与摘要算法
-require "crypt.sha"(crypt)
+require "mycrypt.sha"(crypt)
 
 -- 哈希消息认证码算法
-require "crypt.hmac"(crypt)
+require "mycrypt.hmac"(crypt)
 
 -- 冗余校验算法
-require "crypt.checksum"(crypt)
+require "mycrypt.checksum"(crypt)
 
 -- Base64编码/解码算法
-require "crypt.b64"(crypt)
+require "mycrypt.b64"(crypt)
 
 -- RC4算法
-require "crypt.rc4"(crypt)
+require "mycrypt.rc4"(crypt)
 
 -- AES对称加密算法
-require "crypt.aes"(crypt)
+require "mycrypt.aes"(crypt)
 
 -- DES对称加密算法
-require "crypt.des"(crypt)
+require "mycrypt.des"(crypt)
 
 -- 密钥交换算法
-require "crypt.dh"(crypt)
+require "mycrypt.dh"(crypt)
 
 -- 商用国密算法
-require "crypt.sm"(crypt)
+require "mycrypt.sm"(crypt)
 
 -- 非对称加密算法
-require "crypt.rsa"(crypt)
+require "mycrypt.rsa"(crypt)
 
 -- 一些特殊算法
-require "crypt.utils"(crypt)
+require "mycrypt.utils"(crypt)
 
 return crypt

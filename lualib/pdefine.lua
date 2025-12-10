@@ -166,3 +166,10 @@ GAME_SERVER_NAME = {
     debug = "开发服",
     online = "正式服",
 }
+
+----------------------------------------
+MSG_TYPE = {
+    S2C = 0,
+}
+-- 心跳超时时间
+HEARTBEAT_TIMEOUT = 5 * 5 -- 5秒*5 次

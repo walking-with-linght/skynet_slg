@@ -91,6 +91,15 @@ end
 function CMD.hmget(key,fields)
 	return db:hmget(key,table.unpack(fields))
 end
+function CMD.mget(keys)
+    if not keys or #keys == 0 then
+        return {}
+    end
+    
+    -- 调用原生mget
+    local result = db:mget(table.unpack(keys))
+    return result or {}
+end
 
 function CMD.hincrby(key,field,value)
 	return db:hincrby(key,field,value)

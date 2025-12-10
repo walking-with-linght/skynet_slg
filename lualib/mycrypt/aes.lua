@@ -75,6 +75,7 @@ for _, name in ipairs(list) do
       if hex then
         cipher = hex == 'base64' and base64decode(cipher) or hexdecode(cipher)
       end
+      -- print("aes_*_*_decrypt", CRYPT[nid], key, "cipher", iv, padding,padding_map[padding or 7])
       return aesdec(CRYPT[nid], key, cipher, iv, padding_map[padding or 7])
     end
   end

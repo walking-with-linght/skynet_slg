@@ -29,3 +29,6 @@
 [submodule "3rd/src-c/lua-consistent-hash"]
 	path = 3rd/src-c/lua-consistent-hash
 	url = https://github.com/walking-with-linght/lua-consistent-hash.git
+[submodule "3rd/src-c/lua-gzip"]
+	path = 3rd/src-c/lua-gzip
+	url = https://github.com/findstr/lua-gzip.git

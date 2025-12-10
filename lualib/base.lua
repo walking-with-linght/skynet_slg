@@ -170,6 +170,7 @@ function base.CMD.cluster_send(cluster_name,service_name,func_name,...)
 		return false,"cluster node not online"
 	end
 	local ok,why = pcall(cluster.send,cluster_name,service_name,func_name,...)
+	print("cluster_send",cluster_name,service_name,func_name,ok,why)
 	return ok,why
 end
 
@@ -189,6 +190,7 @@ function base.CMD.cluster_send_by_type(cluster_type,service_name,func_name,...)
 		print("cluster node not online",cluster_type,service_name,func_name)
 		return false,"cluster node not online"
 	end
+	print("cluster_send_by_type",cluster_name,service_name,func_name)
 	return base.CMD.cluster_send(cluster_name,service_name,func_name,...)
 end
 

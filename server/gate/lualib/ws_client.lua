@@ -8,7 +8,10 @@ local error_code = require "error_code"
 -- local sproto_core = require "sproto.core"
 local cjson = require "cjson"
 local cluster = require "skynet.cluster"
--- local ProtoIDs = require "ProtoIDs"
+local protoid = require "protoid"
+local crypt = require "mycrypt"
+local CRYPT = require "lcrypt"
+local time = require "time"
 local gzip = require "gzip"
 local protoloader
 local sprotoloader
@@ -21,7 +24,7 @@ local client = basefunc.class()
 -- 本连接处理的请求
 client.req = {}
 
-local protocol = skynet.getenv("protocol") == "protobuf3"
+
 
 local CMD = base.CMD
 local PUBLIC = base.PUBLIC
@@ -39,11 +42,20 @@ function client.init()
 
     CMD.reload_protocol()
 end
+function client:pack_self()
+    return {
+        node = skynet.getenv("cluster_type"),
+        addr = skynet.self(),
+        client = self.id,
+    }
+end
 
 function CMD.reload_protocol()
+    local protocol = skynet.getenv("protocol")
+    -- print("reload_protocol", protocol)
     if protocol == "json" then
-        proto_pack = function(cmd, data, session, prefix)
-            return cjson.encode({name = cmd, msg = data, session = session, prefix = prefix})
+        proto_pack = function(data)
+            return cjson.encode(data)
         end
         proto_unpack = function(msg) return cjson.decode(msg) end
     end
@@ -165,13 +177,31 @@ function client:on_connect(fd, addr)
     -- 通讯密码
     self.proto_key = nil
 
-    -- 发送通信密钥
+    -- 心跳时间
+    self.heartbeat_time = os.time()
+
+    -- 是否已握手   已握手后需要将每条消息加解密
+    self.handshake = false
+    -- 发送通信密钥（握手消息）
     local secret_key = generate_secret_key()
     self.proto_key = secret_key
-    skynet.timeout(100, function()
-        local msg = cjson.encode({ code = 0,seq = 0, name = "handshake", msg = { key = secret_key}})
-        local comp = gzip.deflate(msg)
-        websocket.write(self.fd, comp, "binary")
+    -- rlog("生成密钥", self.id, "密钥长度", #secret_key, "密钥", secret_key)
+    
+    skynet.timeout(20, function()
+        -- 立即发送握手消息，不延迟
+        -- 握手消息：不加密，只压缩
+        -- local handshake_msg = cjson.encode({ code = error_code.success, seq = 0, name = protoid.handshake, msg = { key = secret_key}})
+        -- local comp = gzip.deflate(handshake_msg)
+        -- websocket.write(self.fd, comp, "binary")
+        self:send2client(
+            {
+                name = protoid.handshake.cmd, 
+                msg = {key = secret_key}, 
+                code = error_code.success, 
+                seq = MSG_TYPE.S2C,
+            })
+        self.handshake = true
+        -- rlog("发送握手消息", self.id, "secretKey长度", #secret_key)
     end)
 
 end
@@ -197,14 +227,35 @@ function client:send_package(pack)
     if string.len(pack) <= 0 then return end
 
     if self.fd then
+        -- 根据加密文档：序列化 -> 加密（如果已握手）-> 压缩 -> 发送
+        
+        -- 1. 加密（如果已握手且不是握手消息）
+        if self.proto_key and string.len(pack) > 0 and self.handshake then
+            
+            local encrypted, err = crypt.aes_128_cbc_encrypt(
+                self.proto_key,
+                pack,
+                self.proto_key,
+                true,  -- hex
+                0      -- padding
+            )
+            if encrypted then
+                pack = encrypted
+            else
+                elog("AES加密失败", err)
+                return
+            end
+        end
 
-        -- if self.proto_key and string.len(pack) > 0 then
-        -- 	pack = sproto_core.xteaencrypt(pack,self.proto_key)
-        -- end
+        -- 2. 压缩
+        local compressed = gzip.deflate(pack)
+        if not compressed then
+            elog("Gzip压缩失败")
+            return
+        end
 
-        -- local package = string.pack(">s2", pack)
-        -- print("websocket 发送消息", #pack)
-        websocket.write(self.fd, pack, "binary")
+        -- 3. 发送
+        websocket.write(self.fd, compressed, "binary")
     end
 end
 
@@ -293,17 +344,10 @@ end
 发送消息响应包
 默认 会 清除 response id 信息（除非强制 设置 _not_del_id=true）
 --]]
-function client:send2client(cmd, _data, resp_id)
+function client:send2client(data)
 
-    print("send_to_client_s2c", cmd, cjson.encode({_data}), resp_id)
-    if sproto and self.responses[resp_id] then
-        self:send_response(resp_id, _data)
-    else
-        local ecode,msg = CMD.pack_message(cmd, _data, resp_id)
-        if ecode == error_code.success then
-            self:send_package(msg)
-        end
-    end
+    local msg = CMD.pack_message(data)
+    self:send_package(msg)
 end
 
 function client:response2client(cmd, _data, resp_id)
@@ -319,23 +363,87 @@ function client:send_error_code(erro_code)
     self:send2client("error_code", {result = erro_code})
 end
 
+-- 重新发送握手消息（当解密失败时）
+function client:resend_handshake()
+    if not self.fd then return end
+    
+    -- 重新生成密钥
+    local secret_key = generate_secret_key()
+    self.proto_key = secret_key
+    
+    -- 发送握手消息（不加密，只压缩）
+    local msg = cjson.encode({ code = 0, seq = 0, name = "handshake", msg = { key = secret_key}})
+    local comp = gzip.deflate(msg)
+    websocket.write(self.fd, comp, "binary")
+    rlog("重新发送握手消息", self.id)
+end
+
+local function binary_to_int8_array(binary_str)
+    local result = {}
+    for i = 1, #binary_str do
+        local byte = binary_str:byte(i)
+        -- 转换为有符号int8
+        local int8 = byte > 127 and byte - 256 or byte
+        table.insert(result, int8)
+    end
+    for i, value in ipairs(result) do
+        local byte = binary_str:byte(i)
+        print(string.format("位置 %d: 0x%02X -> int8: %d", i, byte, value))
+    end
+end
 
 -- 来自客户端的请求
 function client:on_request(msg, sz)
     -- msg = string.unpack(">s2", msg)
     sz = #msg
-    print("on_request self._last_responeId", self._last_responeId, self.id)
+    -- binary_to_int8_array(msg)
+    
+    -- print("on_request self._last_responeId",  self._last_responeId, self.id)
     if self._forbid_request_time and self._forbid_request_time > 0 then
         if self._forbid_request_time < os.time() then return end
         self._forbid_request_time = nil
     end
-    -- 如果有加密，这里就需要解密了
-    -- if self.proto_key and sz > 0 then
-    -- 	sproto_core.xteadecrypt_c(self.proto_key,msg,sz)
-    -- end
+    
+    -- 根据加密文档：接收 -> 解压 -> 解密（如果已握手）-> 反序列化
+    
+    -- 1. 解压
+    local ok,decompressed, err = pcall(gzip.inflate, msg)
+    if not ok then
+        elog("Gzip解压失败", decompressed or "unknown error")
+        return
+    end
+    msg = decompressed
+    sz = #msg
+    
+    -- 2. 解密（如果已握手）
+    -- 注意：客户端发送的消息应该都是加密的（如果已握手）
+    -- 握手消息是服务器发送给客户端的，客户端不会发送握手消息
+    -- 客户端加密后返回的是十六进制字符串（encrypted.ciphertext.toString()）
+    if self.proto_key and sz > 0 and self.handshake then
+        ----------------------------------------
+        --测试1
+        local decrypted, err = crypt.aes_128_cbc_decrypt(
+            self.proto_key,
+            msg,
+            self.proto_key,
+            true,  -- hex
+            0      -- padding
+        )
+        if decrypted then
+            msg = decrypted
+            sz = #msg
+        else
+            elog("AES解密失败", err, "key长度", #self.proto_key, "消息长度", sz)
+        end
+        
+    elseif self.proto_key and sz > 0 and not self.handshake then
+        -- 如果还没有握手，但收到了加密消息，可能是时序问题
+        elog("收到加密消息但尚未握手", "client_id", self.id)
+        return
+    end
     -- 如果是sproto，返回结果应该是ok,type,name,args,response
     -- 如果是proto3，返回结果应该是ok,nil,name,args,session
-    local ok, err_code, name, args, response = pcall(CMD.unpack_message, msg, sz)
+    local ok, data = pcall(CMD.unpack_message, msg, sz)
     local _resp_id
 
     if sproto then _resp_id = self:gen_response_id(name, response) end
@@ -346,16 +454,31 @@ function client:on_request(msg, sz)
         elog("协议错误",err_code, self.pid)
         return
     end
-
-    if err_code ~= error_code.success then
-        elog("协议解析错误",err_code, self.pid)
-        self._forbid_request = true
-        self._wait_kick = true
+    if data.name == protoid.heartbeat.cmd then
+        -- print("收到心跳消息", data.msg.ctime, time.gettime())
+        local now = math.floor(time.gettime() / 10)
+        self.heartbeat_time = os.time()
+        self:send2client(
+            {
+                name = protoid.heartbeat.cmd, 
+                msg = {ctime = data.msg.ctime, stime = now}, 
+                code = error_code.success, 
+                seq = data.seq
+            })
         return
     end
+    local node = protoid[data.name].node
+    local addr = protoid[data.name].addr
+    CMD.cluster_send(node,addr,"dispatch_request",data,self:pack_self())
+    -- if err_code ~= error_code.success then
+    --     elog("协议解析错误",err_code, self.pid)
+    --     self._forbid_request = true
+    --     self._wait_kick = true
+    --     return
+    -- end
 
     if self._forbid_request then
-        self:response2client(name, {result = error_code.forbid_network}, _resp_id)
+        -- self:response2client(name, {result = error_code.forbid_network}, _resp_id)
         self._wait_kick = true
         rlog("禁止请求协议",self.id, self.pid)
         return
@@ -367,50 +490,50 @@ function client:on_request(msg, sz)
     --     elog("不支持服务器下发消息的回包")
     --     return
     -- end
-    if name ~= "heartbeat" then
-    	dlog("收到消息",cjson.encode({name,args}))
-    end
+    -- if data.name ~= protoid.heartbeat then
+    	dlog("收到消息", msg)
+    -- end
 
-    if self.auth == false then
+    -- if self.auth == false then
 
-        self.auth = true
+    --     self.auth = true
 
-        if name ~= "c2s_login" then
-            elog("第一条消息必须是c2s_login",self.id)
-            self._forbid_request = true
-            self._wait_kick = true
-            return
-        end
+    --     if name ~= "c2s_login" then
+    --         elog("第一条消息必须是c2s_login",self.id)
+    --         self._forbid_request = true
+    --         self._wait_kick = true
+    --         return
+    --     end
 
-        if not args.token then
-            self:response2client(name, {result = error_code.token_invalid}, _resp_id)
-            return
-        end
+    --     if not args.token then
+    --         self:response2client(name, {result = error_code.token_invalid}, _resp_id)
+    --         return
+    --     end
 
-        local err_code,data, roles = skynet.call("token_manager","lua","check_token",args.token,self.gate_link)
-        if err_code ~= error_code.success then
-            elog("token验证失败",err_code, self.pid)
-            self:response2client(name, {result = err_code}, _resp_id)
-            self._forbid_request = true
-            self._wait_kick = true
-            return
-        end
-        self.pid = data.pid
-        self.game_link = data.game_link
-        self.auth_time_out = nil
-        self:response2client(name, {result = error_code.success, roles = roles}, _resp_id)
-        return
-    end
+    --     local err_code,data, roles = skynet.call("token_manager","lua","check_token",args.token,self.gate_link)
+    --     if err_code ~= error_code.success then
+    --         elog("token验证失败",err_code, self.pid)
+    --         self:response2client(name, {result = err_code}, _resp_id)
+    --         self._forbid_request = true
+    --         self._wait_kick = true
+    --         return
+    --     end
+    --     self.pid = data.pid
+    --     self.game_link = data.game_link
+    --     self.auth_time_out = nil
+    --     self:response2client(name, {result = error_code.success, roles = roles}, _resp_id)
+    --     return
+    -- end
 
-    if self.game_link then
-        local ok, result = xpcall(client.dispatch_request,
-                                  basefunc.error_handle, self, name, args,
-                                  _resp_id)
-        if not ok then
-            self:print_log("call dispatch_request error:", result)
-        end
+    -- if self.game_link then
+    --     local ok, result = xpcall(client.dispatch_request,
+    --                               basefunc.error_handle, self, name, args,
+    --                               _resp_id)
+    --     if not ok then
+    --         self:print_log("call dispatch_request error:", result)
+    --     end
         
-    end
+    -- end
 
 
 end
@@ -450,6 +573,11 @@ function client:update(dt)
     end
 
     self:check_login_timeout()
+
+    if (os.time() - self.heartbeat_time) >= HEARTBEAT_TIMEOUT then
+        rlog("长时间未心跳，踢人",self.id)
+        self._wait_kick = true
+    end
 end
 
 -- 更新函数（5 秒）
@@ -463,12 +591,13 @@ end
 -- 登录N秒后没有消息，直接踢
 function client:check_login_timeout()
     -- 进入登录排队的除外
-    if self.auth_time_out and os.time() >
-        self.auth_time_out then
-        self._forbid_request = true
-        rlog("长时间未登录，踢人",self.id)
-        self._wait_kick = true
-    end
+    -- if self.auth_time_out and os.time() >
+    --     self.auth_time_out then
+    --     self._forbid_request = true
+    --     rlog("长时间未登录，踢人",self.id)
+    --     self._wait_kick = true
+    -- end
+
 end
 --[[
 发送消息响应包

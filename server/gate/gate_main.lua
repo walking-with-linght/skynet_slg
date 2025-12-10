@@ -29,5 +29,10 @@ skynet.start(function()
     -- 服务发现永远放在最后面
     local addr = skynet.uniqueservice("redis_discover")
 	skynet.call(addr,"lua","start")
-    skynet.exit()
+
+	-- local crypt = require "mycrypt"
+	-- for k, v in pairs(crypt) do
+	-- 	print(k, v,type(v))
+	-- end
+    -- skynet.exit()
 end)

@@ -53,3 +53,11 @@ aoi a* 各种加密库均有现成的
 关于 moon
     是一个基于 go 实现的与 skynetcluster 通信的节点，我将它用于skynet 的 httpclient 实现。
     原项目为 https://github.com/Zwlin98/moon 我做了一点小小的改动，需要再放上来。
+
+
+注意，如果 zlib 拉不下来
+修改 lua-gzip中的.gitmodules 文件，将 url 改为 https://github.com/coolsnowwolf/zlib.git
+在lua-gzip中使用命令
+rm -rf zlib
+git submodule sync
+git submodule update --init --recursive

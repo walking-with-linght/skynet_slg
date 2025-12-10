@@ -1,0 +1,14 @@
+include "config.common"
+
+start = "game_main"	-- main script
+
+-- 节点信息
+cluster_type = "game"
+cluster_name = "game"
+cluster_addr = "127.0.0.1:29310"
+
+-- 开启debug
+console_port = 29311
+
+luaservice = luaservice .. "./server/" .. cluster_type .. "/?.lua;"
+lua_path =  lua_path .. "./server/" .. cluster_type .. "/lualib/?.lua;"

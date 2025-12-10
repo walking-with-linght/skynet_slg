@@ -91,7 +91,7 @@ function LF.error(fd,why)
 	PUBLIC.disconnect(fd)
 end
 function LF.close(fd, code, reason)
-	elog("LF.close",fd, code, reason)
+	rlog("LF.close",fd, code, reason)
 	PUBLIC.disconnect(fd, code, reason)
 end
 function LF.handshake(fd, header, url)
@@ -144,20 +144,20 @@ function CMD.update_game_agent(client_id, agent, rid)
 	_client:update_game_agent(agent, rid)
 end
 
-function CMD.send2client(client_id,name,data,resp_id)
+function CMD.send2client(client_id,data)
 	if not client_id then
-		print("gate_agent CMD.send2client client_id is nil :"..tostring(client_id) ,name)
+		print("gate_agent CMD.send2client client_id is nil :"..tostring(client_id) ,data.name)
 		return
 	end
 
 	local _client = id_clients[client_id]
 
 	if not _client then
-		print(string.format("gate_agent CMD.send2client client_id '%s' is not exists ! %s",tostring(client_id),tostring(name)))
+		print(string.format("gate_agent CMD.send2client client_id '%s' is not exists ! %s",tostring(client_id),data.name))
 		return
 	end
 
-	_client:send2client(name,data,resp_id)
+	_client:send2client(data)
 end
 
 function CMD.update_login_queue(now_size,last_deal_index,deal_index)
@@ -250,7 +250,7 @@ function CMD.start(gate,gate_client_name,conf)
 
 	-- base.set_hotfix_file("fix_gate_agent")
 
-	print("start",gate,gate_client_name,conf)
+	-- print("start",gate,gate_client_name,conf)
 	DATA.conf = conf
 	base_client = require(gate_client_name)
 	DATA.gate = gate

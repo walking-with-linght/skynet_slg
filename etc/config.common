@@ -8,7 +8,7 @@ bootstrap = "snlua bootstrap" -- The service for bootstrap
 harbor = 0
 enablessl=false
 
-discover_key = skynet_slg
+discover_key = "skynet_slg_discover"
 
 etcd_hosts = "http://127.0.0.1:2379"
 etcd_user = "root"
@@ -40,11 +40,11 @@ lua_path =  skynetroot .. "lualib/?.lua;".. skynetroot .. "lualib/compat10/?.lua
 -- 数据库连接数
 mysql_maxconn = 3
 
-db_host = "127.0.0.1"	    -- mysql数据库主机
-db_port = 13306		        -- mysql数据库端口
-db_db = "rank"      -- mysql数据库库名
+db_host = "172.19.12.99"	    -- mysql数据库主机
+db_port = 13311		        -- mysql数据库端口
+db_db = "slgdb"      -- mysql数据库库名
 db_user = "root"             -- mysql数据库帐号
-db_pwd = "d3R38PKkFCmbTkfM"    -- mysql数据库密码
+db_pwd = "123456abc"    -- mysql数据库密码
 
 
 

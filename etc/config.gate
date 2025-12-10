@@ -11,10 +11,10 @@ cluster_addr = "127.0.0.1:29110"
 console_port = 29111
 port = 8004
 maxclient = 10000
-use_ssl = false
+use_ssl = "false"
 -- json protobuf3 sproto
-protocol = json
-platform = macos
+protocol = "json"
+platform = "macos"
 
 luaservice = luaservice .. "./server/" .. cluster_type .. "/?.lua;"
 lua_path =  lua_path .. "./server/" .. cluster_type .. "/lualib/?.lua;"
