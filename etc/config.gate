@@ -9,7 +9,7 @@ cluster_addr = "127.0.0.1:29110"
 
 -- 开启debug
 console_port = 29111
-port = 8004
+port = 8104
 maxclient = 10000
 use_ssl = "false"
 -- json protobuf3 sproto

@@ -6,7 +6,7 @@ local cluster = require "skynet.cluster"
 local queue = require "skynet.queue"()
 local reference_server = require "reference.server"
 local event = require "event"
--- require "mods.init"
+require "mods.init"
 
 local DATA = base.DATA --本服务使用的表
 local CMD = base.CMD  --供其他服务调用的接口
@@ -63,7 +63,7 @@ function lf.load(rid)
 	return
 end
 
-function lf.enter(rid,gate_link)
+function lf.enter(args,gate_link)
 	assert(ROLE.STATE == role_state.loaded or ROLE.STATE == role_state.online)
 
 	local fd = gate_link.fd
@@ -75,10 +75,12 @@ function lf.enter(rid,gate_link)
 		reference_server.unref()
 	end
 	ROLE.fd = fd
+	ROLE.rid = args.rid
+	ROLE.uid = args.uid
 	ROLE.gate_link = gate_link
 	ROLE.ip = gate_link.ip
 	ROLE.online = true
-	event:dispatch("enter",ROLE)
+	event:dispatch("enter",ROLE, args.seq)
 	ROLE.STATE = role_state.online
 	rlog(string.format("agent_enter(nickname:%s,rid:%s,uid:%s,fd:%s) ", ROLE.nickname, ROLE.rid,ROLE.uid,
 		ROLE.fd or 0))
@@ -86,8 +88,10 @@ function lf.enter(rid,gate_link)
 	CMD.cluster_send(gate_link.node, gate_link.addr, "update_game_link", gate_link.client, {
 		node = skynet.getenv("cluster_name"),
 		addr = skynet.self(),
-	}, rid)
+	}, args.rid)
+	-- 发送角色数据
 
+	return true
 end
 
 function CMD.load(rid)
@@ -99,9 +103,9 @@ function CMD.load(rid)
 
 end
 
-function CMD.enter(rid, gate_link)
+function CMD.enter(args, gate_link)
 	if not gate_link.fd then return true end
-	return queue(lf.enter,rid,gate_link)
+	return queue(lf.enter,args,gate_link)
 end
 
 

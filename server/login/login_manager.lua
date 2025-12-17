@@ -32,67 +32,54 @@ REQUEST["account.login"] = function(data, gate_link)
     local ip = data.msg.ip
     local hardware = data.msg.hardware
 
-    local username_redis_key = string.format("username:%s", username)
+
+    local ok,account = skynet.call(".mysql", "lua", "select_one_by_key", "tb_user_info", "username", username)
+    if not ok then
+        send2client(gate_link, {
+            name = "account.login",
+            seq = data.seq,
+            code = error_code.DBError,
+        })
+        return
+    end
     --- 拿到 uid
-    local uid = skynet.call(".redis", "lua", "get", username_redis_key)
-    if not uid then
+    if not account or not account.uid then
+        send2client(gate_link, {
+            name = "account.login",
+            seq = data.seq,
+            code = error_code.account_not_exists,
+        })
+        return
+    end
+    
+    local passwd = account.passwd
+    if passwd ~= basefunc.md5(password, account.passcode) then
         send2client(gate_link, {
             name = "account.login",
             -- msg = {
+            --     password = "",
+            --     session = "",
+            --     uid = "",
+            --     username = "",
             -- },
-            seq = data.seq,
-            code = error_code.account_not_exists,
-        })
-        return
-    end
-    local uid_redis_key = string.format("uid:%s", uid)
-    local user_data = skynet.call(".redis", "lua", "hmget", uid_redis_key, {"passcode", "passwd", "uid", "username"})
-    print(uid_redis_key,"uid_redis_key",dump(user_data))
-    if not user_data[1] then
-        send2client(gate_link, {
-            name = "account.login",
-            msg = {
-                password = "",
-                session = "",
-                uid = "",
-                username = "",
-            },
-            seq = data.seq,
-            code = error_code.account_not_exists,
-        })
-        elog("有 uid，但查不到具体账号数据", uid_redis_key)
-        return
-    end
-    local passwd = user_data[2]
-    if passwd ~= basefunc.md5(password, user_data[1]) then
-        send2client(gate_link, {
-            name = "account.login",
-            msg = {
-                password = "",
-                session = "",
-                uid = "",
-                username = "",
-            },
             seq = data.seq,
             code = error_code.password_incorrect,
         })
         return
     end
-    local ok,session = sessionlib.generate_session(user_data[3])
+    local ok,session = sessionlib.generate_session(account.uid)
     if not ok then
-        elog(user_data[3],session)
+        elog(account.uid, session)
         return
     end
     print(session,"session")
-    skynet.call(".redis", "lua", "hset", uid_redis_key, "session", session)
     send2client(gate_link, {
         name = "account.login",
         msg = {
-            password = user_data[2],
+            password = account.password,
             session = session,
-            uid = user_data[3],
-            username = user_data[4],
-            sid = 0,-- 这里设置了好像也没用
+            uid = account.uid,
+            username = account.username,
         },
         seq = data.seq,
         code = error_code.success,
@@ -100,8 +87,8 @@ REQUEST["account.login"] = function(data, gate_link)
     -- 写日志，tb_login_last tb_login_history
     -- 但用户只有一条
     skynet.send(".mysql", "lua", "execute", 
-        string.format("insert into tb_login_last(uid,login_time,ip,is_logout,hardware,session) value (%d, '%s', '%s', %d, '%s', '%s') on duplicate key update login_time = ''%s, ip = '%s', is_logout = %d,hardware = '%s',session = '%s' ;",
-            tonumber(uid),
+        string.format("insert into tb_login_last(uid,login_time,ip,is_logout,hardware,session) value (%d, '%s', '%s', %d, '%s', '%s') on duplicate key update login_time = '%s', ip = '%s', is_logout = %d, hardware = '%s',session = '%s' ;",
+            account.uid,
             os.date('%Y-%m-%d %H:%M:%S'),
             data.ip,
             0, -- 0=登录 1=登出
@@ -116,13 +103,13 @@ REQUEST["account.login"] = function(data, gate_link)
         )
     )
     skynet.send(".mysql", "lua", "insert", "tb_login_history", {
-        uid = tonumber(uid),
+        uid = account.uid,
         ctime = os.date('%Y-%m-%d %H:%M:%S'),
         ip = data.ip,
         state = 0, -- 0=登录 1=登出
         hardware = hardware,
     })
-    CMD.cluster_send(gate_link.node, gate_link.addr, "update_login_state", gate_link.client, {username = username,uid = uid} , true)
+    CMD.cluster_send(gate_link.node, gate_link.addr, "update_login_state", gate_link.client, {username = username,uid = account.uid} , true)
 end
 
 function CMD.client_request(data, gate_link)
@@ -134,22 +121,22 @@ function CMD.client_request(data, gate_link)
             elog("error", data.name, ret)
         end
     else
-        print("command not found", data.name)
+        elog("command not found", data.name)
     end
 end
 
-local function init()
-    local ok,ret = skynet.call(".mysql", "lua", "execute", "SELECT MAX(uid) FROM tb_user_info;SELECT MAX(rid) FROM tb_role_1;")
-    if ok then
-        print(dump(ret))
-        local uid_max = ret[1][1]["MAX(uid)"]
-        local rid_max = ret[2][1]["MAX(rid)"]
-        -- print("uid_max",uid_max)
-        -- print("rid_max",rid_max)
-        skynet.call(".redis", "lua", "set", "uid_seq", uid_max)
-        skynet.call(".redis", "lua", "set", "rid_seq", rid_max)
-    end
-end
+-- local function init()
+--     local ok,ret = skynet.call(".mysql", "lua", "execute", "SELECT MAX(uid) FROM tb_user_info;SELECT MAX(rid) FROM tb_role_1;")
+--     if ok then
+--         print(dump(ret))
+--         local uid_max = ret[1][1]["MAX(uid)"]
+--         local rid_max = ret[2][1]["MAX(rid)"]
+--         -- print("uid_max",uid_max)
+--         -- print("rid_max",rid_max)
+--         skynet.call(".redis", "lua", "set", "uid_seq", uid_max)
+--         skynet.call(".redis", "lua", "set", "rid_seq", rid_max)
+--     end
+-- end
 
 -- 服务主入口
 -- skynet.start(function()
@@ -174,4 +161,4 @@ end
 --     end)
 --     skynet.register(".login_manager")
 -- end)
-base.start_service(".login_manager",nil,init)
+base.start_service(".login_manager")

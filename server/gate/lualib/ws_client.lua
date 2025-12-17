@@ -200,7 +200,7 @@ function client:on_connect(fd, addr)
         -- websocket.write(self.fd, comp, "binary")
         self:send2client(
             {
-                name = protoid.handshake.cmd, 
+                name = protoid.handshake, 
                 msg = {key = secret_key}, 
                 code = error_code.success, 
                 seq = MSG_TYPE.S2C,
@@ -466,25 +466,23 @@ function client:on_request(msg, sz)
         elog("协议错误",err_code, self.pid)
         return
     end
-    if data.name == protoid.heartbeat.cmd then
+    if data.name == protoid.heartbeat then
         -- print("收到心跳消息", data.msg.ctime, time.gettime())
         local now = math.floor(time.gettime() / 10)
         self.heartbeat_time = os.time()
         self:send2client(
             {
-                name = protoid.heartbeat.cmd, 
+                name = protoid.heartbeat, 
                 msg = {ctime = data.msg.ctime, stime = now}, 
                 code = error_code.success, 
                 seq = data.seq
             })
         return
     end
-    if not protoid[data.name] then
-        elog("协议不存在",data.name)
-        return
-    end
-    local node = protoid[data.name].node
-    local addr = protoid[data.name].addr
+    -- if not protoid[data.name] then
+    --     elog("协议不存在",data.name)
+    --     return
+    -- end
     data.ip = self.ip
 
     self:dispatch_request(data.name, data)
@@ -682,6 +680,7 @@ function client:dispatch_request(name, data, _resp_id)
         if self.game_link then
             if self.game_link.addr then
                 CMD.cluster_send(self.game_link.node, self.game_link.addr, "client_request", data , self:pack_self())
+                return
             end
         end
         CMD.cluster_send_by_type("game", ".agent_manager", "client_request", data, self:pack_self())
@@ -698,7 +697,7 @@ function client.req:heartbeat(data)
      self.heartbeat_time = os.time()
      self:send2client(
          {
-             name = protoid.heartbeat.cmd, 
+             name = protoid.heartbeat, 
              msg = {ctime = data.msg.ctime, stime = now}, 
              code = error_code.success, 
              seq = data.seq

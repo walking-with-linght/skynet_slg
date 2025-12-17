@@ -7,6 +7,11 @@ cluster_type = "game"
 cluster_name = "game"
 cluster_addr = "127.0.0.1:29310"
 
+-- 地图宽度
+MapWith = 200
+-- 地图高度
+MapHeight = 200
+
 -- 开启debug
 console_port = 29311
 

@@ -1,2 +1,6 @@
-require "agent.mods.m_base"
-require "agent.mods.m_boom"
+require "mods.m_base"
+require "mods.m_resource"
+require "mods.m_armys"
+require "mods.m_builds"
+require "mods.m_generals"
+require "mods.m_cytys"

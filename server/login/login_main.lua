@@ -17,13 +17,13 @@ skynet.start(function()
 		password 	= skynet.getenv("db_pwd"),
 		name = ".mysql",
 	})
-    skynet.call(skynet.newservice("redispool"), "lua", "open", {
-		host 	= skynet.getenv("redis_host"),
-		port 	= skynet.getenv("redis_port"),
-		db 		= skynet.getenv("redis_db"),
-		auth 	= skynet.getenv("redis_auth"),
-		name = ".redis",
-	})
+    -- skynet.call(skynet.newservice("redispool"), "lua", "open", {
+	-- 	host 	= skynet.getenv("redis_host"),
+	-- 	port 	= skynet.getenv("redis_port"),
+	-- 	db 		= skynet.getenv("redis_db"),
+	-- 	auth 	= skynet.getenv("redis_auth"),
+	-- 	name = ".redis",
+	-- })
 
     
     local port = skynet.getenv("slgwebport")

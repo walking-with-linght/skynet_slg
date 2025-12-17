@@ -1,31 +1,17 @@
 
 return {
     -- 握手
-    handshake = {
-        cmd = "handshake",
-        node = "gate"
-    },
+    handshake =  "handshake",
     -- 心跳
-    heartbeat = {
-        cmd = "heartbeat",
-        node = "gate"
-    },
+    heartbeat =  "heartbeat",
     -- 登录
-    ["account.login"] = {
-        cmd = "account.login",
-        node = "login",
-        addr = ".login_manager"
-    },
+    account_login = "account.login",
     -- 进入游戏
-    ["role.enterServer"] = {
-        cmd = "role.enterServer",
-        node = "game",
-        addr = ".agent_manager"
-    },
+    role_enterServer = "role.enterServer",
     -- 创建角色
-    ["role.create"] = {
-        cmd = "role.create",
-        node = "login",
-        addr = ".login_manager"
-    },
+    role_create =  "role.create",
+    -- 拉取配置
+    nationMap_config = "nationMap.config",
+    -- 角色属性
+    nrole_myProperty = "role.myProperty",
 }

@@ -38,7 +38,7 @@ local function new_agent(rid)
 	end
 	local ok, err = pcall(skynet.call, agent, "lua", "load", rid)
 	if not ok then
-		skynet.send(agent, "lua", "stop")
+		skynet.send(agent, "lua", "stop_service")
 		error(err)
 	end
 	return agent

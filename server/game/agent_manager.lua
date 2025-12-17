@@ -13,7 +13,6 @@ local basefunc = require "basefunc"
 require "skynet.manager"
 local sessionlib = require "session"
 local error_code = require "error_code"
-local msgpack = require "msgpack"
 
 require "agent_helper"
 
@@ -22,6 +21,7 @@ local PUBLIC=base.PUBLIC
 local DATA=base.DATA
 local REQUEST=base.REQUEST
 
+local ROLES = {}
 
 local ld = base.LocalData("agent_manager")
 local lf = base.LocalFunc("agent_manager")
@@ -30,6 +30,7 @@ ld.wait_login = {}
 ld.online_uid = {}
 ld.online_rid = {}
 ld.online_cnt = 0
+
 
 local function send2client(gate_link, data)
     CMD.cluster_send(gate_link.node, gate_link.addr, "send2client", gate_link.client,data)
@@ -54,9 +55,16 @@ REQUEST["role.create"] = function(data, gate_link)
     local sex = data.msg.sex
 
     -- 查一下有没有角色，没有再新建
-    local uid_redis_key = string.format("uid:%s", uid)
-    local rid = skynet.call(".redis", "lua", "hget", uid_redis_key,"rid")
-    if rid then
+    local ok,role = skynet.call(".mysql", "lua", "select_one_by_key", "tb_role_1", "uid" , uid)
+    if not ok then
+        send2client(gate_link, {
+            name = "role.create",
+            seq = data.seq,
+            code = error_code.DBError,
+        })
+        return
+    end
+    if role and role.rid then
         send2client(gate_link, {
             name = "role.create",
             -- msg = {
@@ -67,9 +75,7 @@ REQUEST["role.create"] = function(data, gate_link)
         return
     end
     -- 创建新角色
-    local rid = skynet.call(".redis", "lua", "incr", "rid_seq")
     local role = {
-        rid = tonumber(rid),
         uid = uid,
         headId = headId,
         sex = sex,
@@ -79,10 +85,8 @@ REQUEST["role.create"] = function(data, gate_link)
         created_at = os.date('%Y-%m-%d %H:%M:%S'),
         profile = ""
     }
-    local role_redis_key = string.format("rid:%s", rid)
-    skynet.call(".redis", "lua", "hmset", role_redis_key, role)
-    skynet.call(".redis", "lua", "hset", uid_redis_key, "rid", rid)
-    skynet.send(".mysql", "lua", "insert", "tb_role_1", role)
+    local ok,rid = skynet.call(".mysql", "lua", "insert", "tb_role_1", role)
+    role.rid = rid
     send2client(gate_link, {
         name = "role.create",
         msg = {
@@ -111,9 +115,16 @@ REQUEST["role.enterServer"] = function(data, gate_link)
     
     -- 这里可以分配 agent 服务了
     -- 查找角色
-    local uid_redis_key = string.format("uid:%s", uid)
-    local rid = tonumber(skynet.call(".redis", "lua", "hget", uid_redis_key, "rid"))
-    if not rid then
+    local ok, role = skynet.call(".mysql", "lua", "select_one_by_key", "tb_role_1", "uid" , uid)
+    if not ok then
+        send2client(gate_link, {
+            name = "role.enterServer",
+            seq = data.seq,
+            code = error_code.DBError,
+        })
+        return
+    end
+    if not role or not role.rid then
         send2client(gate_link, {
             name = "role.enterServer",
             seq = data.seq,
@@ -121,20 +132,26 @@ REQUEST["role.enterServer"] = function(data, gate_link)
         })
         return
     end
-    local agent = lf.agent_load(rid)
-    ROLES[rid] = {
-        agent  = agent
+    local agent = lf.agent_load(role.rid )
+    ROLES[role.rid ] = {
+        agent  = agent,
+        rid = role.rid ,
+        uid = uid,
     }
-    local ok, uinfo = skynet.call(agent, "lua", "enter", rid, gate_link)
+    local ok, uinfo = skynet.call(agent, "lua", "enter", { rid = role.rid , uid = uid ,seq = data.seq}, gate_link)
     if not ok then
-        ROLES[rid] = nil
+        ROLES[role.rid ] = nil
         send2client(gate_link, {
             name = "role.enterServer",
             seq = data.seq,
             code = error_code.DBError,
         })
+        return
     end
-
+    ld.wait_login[uid] = nil
+    ld.online_uid[uid] = agent
+    ld.online_rid[role.rid ] = agent
+    ld.online_cnt = ld.online_cnt + 1
 end
 
 function CMD.client_request(data, gate_link)
@@ -146,7 +163,7 @@ function CMD.client_request(data, gate_link)
             elog("error", data.name, ret)
         end
     else
-        print("command not found", data.name)
+        elog("command not found", data.name)
     end
 end
 
@@ -182,6 +199,8 @@ function CMD.close(role)
     if self and self.agent then
         skynet.send(self.agent, "lua", "afk", fd)
         ROLES[rid] = nil
+        ld.online_uid[self.uid] = nil
+        ld.online_rid[self.rid] = nil
     end
 end
 
@@ -238,22 +257,24 @@ end
 --     end
 -- end
 
-function CMD.send2client(pid,cmd,data)
-    if ld.wait_login[pid] then
-        local gate_link = ld.wait_login[pid].gate_link
-        CMD.cluster_send(gate_link.node, gate_link.addr, "send2client", gate_link.client, cmd,data)
-    end
-end
+-- function CMD.send2client(rid,cmd,data)
+--     if ld.wait_login[rid] then
+--         local gate_link = ld.wait_login[pid].gate_link
+--         CMD.cluster_send(gate_link.node, gate_link.addr, "send2client", gate_link.client, cmd,data)
+--     end
+-- end
 
 function CMD.disconnect( rid)
     rlog("disconnect", rid)
-    local agent = ld.online_uid[pid]
-    ld.online_uid[pid] = nil
-    
-    ld.wait_login[pid] = nil
-    if rid then
-        ld.online_rid[rid] = nil
+
+    local role = ROLES[rid]
+    if not rid or not role then
+        elog("玩家离线 啥玩意儿，没传 rid 啊",rid)
     end
+    local agent = role.agent
+    ld.online_uid[role.uid] = nil
+    ld.online_rid[role.rid] = nil
+
     if agent then
         -- rlog("玩家断开连接",pid,rid)
         skynet.send(agent,"lua","disconnect")
