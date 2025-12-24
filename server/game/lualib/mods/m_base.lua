@@ -8,6 +8,7 @@ local sharedata = require "skynet.sharedata"
 local sessionlib = require "session"
 local time = require "time"
 local protoid = require "protoid"
+local utils = require "utils"
 
 local DATA = base.DATA --本服务使用的表
 local CMD = base.CMD  --供其他服务调用的接口
@@ -91,5 +92,38 @@ end
 
 -- 角色属性
 REQUEST[protoid.nrole_myProperty] = function(self,args)
-
+	local role_res_config = sharedata.query("config/basic.lua")
+	local pack_role_res = {
+		depot_capacity = role_res_config.role.depot_capacity,
+		gold_yield = role_res_config.role.gold_yield,
+		grain_yield = role_res_config.role.grain_yield,
+		iron_yield = role_res_config.role.iron_yield,
+		stone_yield = role_res_config.role.stone_yield,
+		wood_yield = role_res_config.role.wood_yield,
+	}
+	table.merge(pack_role_res, self.role_res)
+	local pack = {
+		armys = self.armys,
+		citys = self.citys,
+		generals = self.generals,
+		mr_builds = {}, -- 应该是正在建造的建筑
+		role_res = pack_role_res,
+	}
+	CMD.send2client({
+		seq = args.seq,
+		msg = pack,
+		name = protoid.nrole_myProperty,
+		code = error_code.success,
+	})
 end
+
+-- 坐标收藏
+REQUEST[protoid.role_posTagList] = function(self,args)
+	CMD.send2client({
+		seq = args.seq,
+		msg = self.role_attr.pos_tags,
+		name = protoid.role_posTagList,
+		code = error_code.success,
+	})
+end
+

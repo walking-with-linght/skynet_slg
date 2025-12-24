@@ -3,6 +3,9 @@
 local skynet = require "skynet"
 local base = require "base"
 local event = require "event"
+local sharedata = require "skynet.sharedata"
+local protoid = require "protoid"
+local error_code = require "error_code"
 
 local DATA = base.DATA --本服务使用的表
 local CMD = base.CMD  --供其他服务调用的接口
@@ -13,14 +16,34 @@ local NM = "citys"
 
 local lf = base.LocalFunc(NM)
 
+
+
 function lf.load(self)
     local ok,citys = skynet.call(".mysql", "lua", "select_by_key", "tb_map_role_city_1", "rid", self.rid)
-    if not citys then
-        -- 随机出生一个城市
-		local x = math.random(0,skynet.getenv("MapWith"))
-		local y = math.random(0,skynet.getenv("MapHeight"))
-        -- //系统城池附近5格不能有玩家城池
+    if not citys or #citys == 0 then
+        -- 创建主城池
+        local ok, city = skynet.call(".map_manager", "lua", "findAndCreateMainCity", {rid = self.rid,nick_name = self.role.nick_name})
+        if ok then
+            city.is_main = city.is_main == 1 and true or false
+            citys = {city}
+        else
+            skynet.error("创建主城池失败:", city)
+            citys = {}
+        end
     end
+    for _,city in ipairs(citys) do
+        city.is_main = city.is_main == 1 and true or false
+        city.max_durable = city.max_durable or 100000
+        city.level = city.level or 1
+        city.parent_id = city.parent_id or 0
+        city.union_id = city.union_id or 0
+        city.union_name = city.union_name or ""
+    end
+    -- max_durable
+    -- level
+    -- parent_id
+    -- union_id
+    -- union_name
     self.citys = citys or {}
 end
 function lf.loaded(self)
@@ -33,9 +56,36 @@ function lf.leave(self)
 
 end
 
+
 skynet.init(function () 
-	citys:register("load",lf.load)
+	event:register("load",lf.load)
 	event:register("loaded",lf.loaded)
 	event:register("enter",lf.enter)
 	event:register("leave",lf.leave)
 end)
+
+-- 战报
+REQUEST[protoid.nationMap_scanBlock] = function(self,args)
+
+	-- CMD.send2client({
+	-- 	seq = args.seq,
+	-- 	msg = {
+	-- 		list = {},
+	-- 	},
+	-- 	name = protoid.nationMap_scanBlock,
+	-- 	code = error_code.success,
+	-- })
+end
+
+-- 上报自己位置
+REQUEST[protoid.role_upPosition] = function(self,args)
+
+	-- CMD.send2client({
+	-- 	seq = args.seq,
+	-- 	msg = {
+	-- 		list = {},
+	-- 	},
+	-- 	name = protoid.nationMap_scanBlock,
+	-- 	code = error_code.success,
+	-- })
+end

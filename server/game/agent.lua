@@ -98,7 +98,7 @@ function CMD.load(rid)
 	queue(function()
 		assert(not next(ROLE))
 		lf.load(rid)
-		print(dump(ROLE))
+		-- print(dump(ROLE))
 	end)
 
 end
@@ -119,7 +119,7 @@ function lf.do_request(data, gate_link)
 			elog("执行客户端请求失败",ret)
 			return
 		end
-		-- log.debug("协议处理结果",sdump(ret))
+		-- dlog("协议处理结果",sdump(ret))
 		if ret then
 			ret.seq = data.seq
 			ret.name = data.name

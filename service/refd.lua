@@ -16,7 +16,7 @@ local function release(obj, addr, ver)
 	if obj.ref == 0 then
 		obj.ref = -1
 		skynet.call(addr, "lua", "stop_service")
-		log.info("没有引用，发送回收",addr)
+		rlog("没有引用，发送回收",addr)
 	end
 end
 

@@ -222,7 +222,7 @@ end
 
 -- function lf.c2s_create_role(pid,args)
 --     local prof = args.prof
---     log.debug("创建角色",pid,prof)
+--     dlog("创建角色",pid,prof)
 --     if not Role_Prof[prof] then
 --         return {result = error_code.prof_not_found}
 --     end
@@ -236,7 +236,7 @@ end
 --选择并进入游戏
 -- function lf.c2s_select_role(pid,args)
 --     local rid = args.rid
---     log.debug("选择角色进入游戏",pid,rid)
+--     dlog("选择角色进入游戏",pid,rid)
 --     local role = skynet.call(".roled","lua","query_role", pid, rid)
 --     if role and role.rid then
 --         role.pid = pid
@@ -266,10 +266,10 @@ end
 
 function CMD.disconnect( rid)
     rlog("disconnect", rid)
-
     local role = ROLES[rid]
-    if not rid or not role then
+    if not role or not rid or not role then
         elog("玩家离线 啥玩意儿，没传 rid 啊",rid)
+        return
     end
     local agent = role.agent
     ld.online_uid[role.uid] = nil

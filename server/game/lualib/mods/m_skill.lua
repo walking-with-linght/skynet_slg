@@ -1,28 +1,22 @@
 
--- 武将
+-- 军队
 local skynet = require "skynet"
 local base = require "base"
 local event = require "event"
 local protoid = require "protoid"
 local error_code = require "error_code"
-local cjson = require "cjson"
+
 
 local DATA = base.DATA --本服务使用的表
 local CMD = base.CMD  --供其他服务调用的接口
 local PUBLIC = base.PUBLIC --本服务调用的接口
 local REQUEST = base.REQUEST
 
-local NM = "generals"
+local NM = "skill"
 
 local lf = base.LocalFunc(NM)
 
 function lf.load(self)
-	local generals, ok = skynet.call(".general_manager", "lua", "getOrCreateByRId", self.rid)
-	if ok then
-		self.generals = generals
-	else
-		self.generals = {}
-	end
 end
 function lf.loaded(self)
 
@@ -41,14 +35,32 @@ skynet.init(function ()
 	event:register("leave",lf.leave)
 end)
 
--- 武将信息
-REQUEST[protoid.general_myGenerals] = function(self,args)
+-- 技能列表
+REQUEST[protoid.skill_list] = function(self,args)
 	CMD.send2client({
 		seq = args.seq,
 		msg = {
-			generals = self.generals,
+			list = {
+				{
+					cfgId = 301,
+					generals = {},
+					id = 1,
+				},
+				{
+					cfgId = 201,
+					generals = {},
+					id = 2,
+				},
+				{
+					cfgId = 101,
+					generals = {},
+					id = 3,
+				},
+			},
 		},
-		name = protoid.general_myGenerals,
+		name = protoid.skill_list,
 		code = error_code.success,
 	})
 end
+
+

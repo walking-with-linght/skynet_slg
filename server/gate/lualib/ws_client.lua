@@ -13,6 +13,8 @@ local crypt = require "mycrypt"
 local CRYPT = require "lcrypt"
 local time = require "time"
 local gzip = require "gzip"
+-- 启用空表作为数组
+cjson.encode_empty_table_as_array(true)
 local protoloader
 local sprotoloader
 
@@ -42,17 +44,16 @@ function client.init()
 
     CMD.reload_protocol()
 end
-local self_node = nil
 function client:pack_self()
-    if not self_node then
-        self_node = {
+    if not self.node then
+        self.node = {
             node = skynet.getenv("cluster_type"),
             addr = skynet.self(),
             client = self.id,
             fd = self.fd,
         }
     end
-    return self_node
+    return self.node
 end
 
 function CMD.reload_protocol()
@@ -240,7 +241,7 @@ function client:send_package(pack)
 
     if self.fd then
         -- 根据加密文档：序列化 -> 加密（如果已握手）-> 压缩 -> 发送
-        dlog("发送消息", pack)
+        dlog("发送消息",self.id, pack)
         -- 1. 加密（如果已握手且不是握手消息）
         if self.proto_key and string.len(pack) > 0 and self.handshake then
             
@@ -467,7 +468,7 @@ function client:on_request(msg, sz)
         return
     end
     if data.name == protoid.heartbeat then
-        -- print("收到心跳消息", data.msg.ctime, time.gettime())
+        print("收到心跳消息", data.msg.ctime, time.gettime())
         local now = math.floor(time.gettime() / 10)
         self.heartbeat_time = os.time()
         self:send2client(
@@ -601,7 +602,7 @@ function client:update(dt)
     self:check_login_timeout()
 
     if (os.time() - self.heartbeat_time) >= HEARTBEAT_TIMEOUT then
-        rlog("长时间未心跳，踢人",self.id)
+        rlog("长时间未心跳，踢人",self.id, (os.time() - self.heartbeat_time), HEARTBEAT_TIMEOUT)
         self._wait_kick = true
     end
 end

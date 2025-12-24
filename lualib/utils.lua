@@ -241,5 +241,98 @@ function string.trim(s, char)
     return (string_gsub(s, "^".. char .."*(.-)".. char .."*$", "%1"))
 end
 
+-- 是否跨天
+function _M.isCrossDay(givenTimeStr)
+    -- 检查输入是否为空
+    if not givenTimeStr or givenTimeStr == "" then
+        return true -- 默认跨天
+    end
+    
+    -- 获取当前时间
+    local currentTime = os.time()
+    local currentDate = os.date("*t", currentTime)
+    
+    -- 解析给定的时间字符串
+    local year, month, day, hour, min, sec = string.match(givenTimeStr, 
+        "(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+    
+    if not year then
+        -- 如果解析失败，尝试其他格式或返回false
+        return false
+    end
+    
+    -- 将字符串转换为数字
+    year, month, day, hour, min, sec = 
+        tonumber(year), tonumber(month), tonumber(day), 
+        tonumber(hour), tonumber(min), tonumber(sec)
+    
+    -- 创建给定时间的时间表
+    local givenTimeTable = {
+        year = year,
+        month = month,
+        day = day,
+        hour = hour,
+        min = min,
+        sec = sec
+    }
+    
+    -- 将给定时间转换为时间戳
+    local givenTimestamp = os.time(givenTimeTable)
+    if not givenTimestamp then
+        return false
+    end
+    
+    -- 获取给定时间的日期部分
+    local givenDate = os.date("*t", givenTimestamp)
+    
+    -- 判断是否跨天：比较年、月、日是否都相同
+    if currentDate.year == givenDate.year and
+       currentDate.month == givenDate.month and
+       currentDate.day == givenDate.day then
+        return false  -- 同一天
+    else
+        return true   -- 跨天了
+    end
+end
+
+-- 日期转换为时间戳
+function _M.date2timestamp(givenTimeStr)
+    -- 检查输入是否为空
+    if not givenTimeStr or givenTimeStr == "" then
+        return 0 -- 默认跨天
+    end
+    
+    -- 获取当前时间
+    local currentTime = os.time()
+    local currentDate = os.date("*t", currentTime)
+    
+    -- 解析给定的时间字符串
+    local year, month, day, hour, min, sec = string.match(givenTimeStr, 
+        "(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+    
+    if not year then
+        -- 如果解析失败，尝试其他格式或返回false
+        return 0
+    end
+    
+    -- 将字符串转换为数字
+    year, month, day, hour, min, sec = 
+        tonumber(year), tonumber(month), tonumber(day), 
+        tonumber(hour), tonumber(min), tonumber(sec)
+    
+    -- 创建给定时间的时间表
+    local givenTimeTable = {
+        year = year,
+        month = month,
+        day = day,
+        hour = hour,
+        min = min,
+        sec = sec
+    }
+    
+    -- 将给定时间转换为时间戳
+    return os.time(givenTimeTable)
+end
+
 
 return _M

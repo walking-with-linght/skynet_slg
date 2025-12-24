@@ -41,7 +41,7 @@ local function handle_request(id, url, method, header, body, interface)
     else
         query = {}
     end
-    -- log.info("handle_request",cjson.encode({path, method, header, body, query}))
+    -- rlog("handle_request",cjson.encode({path, method, header, body, query}))
     local code, ret, new_header = handle(path, method, header, body, query)
     if type(ret) == 'table' then
         ret = cjson.encode(ret)
