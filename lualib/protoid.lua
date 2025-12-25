@@ -32,4 +32,14 @@ return {
     interior_openCollect = "interior.openCollect",
     -- 征收资源
     interior_collect = "interior.collect",
+    -- 装备技能
+    general_upSkill = "general.upSkill",
+    -- 卸下技能
+    general_downSkill = "general.downSkill",
+    -- 更新将领
+    general_push = "general.push",
+    -- 升级技能
+    general_lvSkill = "general.lvSkill",
+    -- 回收武将卡
+    general_convert = "general.convert",
 }

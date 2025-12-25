@@ -34,7 +34,7 @@ function lf.load(self)
 	-- 基础数据
 	local ok,role = skynet.call(".mysql", "lua", "select_one_by_key", "tb_role_1", "rid", self.rid)
 	assert(ok)
-	
+	role.nickName = role.nick_name
 	-- 基础数据
 	self.role = role
 end

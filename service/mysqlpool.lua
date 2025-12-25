@@ -112,7 +112,7 @@ function CMD.insertAll( tablename, rows )
 	end
 	sql = string.sub(sql, 0, -2)
 	local ret,result = CMD.execute(sql)
-	return ret
+	return ret,result
 end
 
 function CMD.delete( tablename, key, value )

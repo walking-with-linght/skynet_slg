@@ -78,7 +78,5 @@ skynet.start(function()
     local addr = skynet.uniqueservice("redis_discover")
 	skynet.call(addr,"lua","start")
 
-
-
     skynet.exit()
 end)

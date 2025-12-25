@@ -15,14 +15,17 @@ local REQUEST = base.REQUEST
 local NM = "generals"
 
 local lf = base.LocalFunc(NM)
+local ld = base.LocalData(NM)
 
+ld.id_map_cache = {}
 function lf.load(self)
 	local generals, ok = skynet.call(".general_manager", "lua", "getOrCreateByRId", self.rid)
-	if ok then
-		self.generals = generals
-	else
-		self.generals = {}
+	assert(ok)
+	self.generals = generals
+	for _, general in ipairs(self.generals) do
+		ld.id_map_cache[general.id] = general
 	end
+	-- print(dump(self.generals))
 end
 function lf.loaded(self)
 
@@ -32,6 +35,49 @@ function lf.enter(self, seq)
 end
 function lf.leave(self)
 
+end
+
+function PUBLIC.getGeneralById(self, id)
+	return ld.id_map_cache[id]
+end
+
+
+function PUBLIC.saveGeneral(self, id)
+	local general = ld.id_map_cache[id]
+	if not general then
+		return
+	end
+	print("更新保存武将", id)
+	local ok,msg = skynet.call(".general_manager", "lua", "batchUpdateGeneral", {general})
+	print("更新保存武将", ok, msg)
+end
+
+function PUBLIC.saveGenerals(self, ids)
+	if not ids or #ids == 0 then
+		return
+	end
+	local generals = {}
+	for _, id in ipairs(ids) do
+		local general = ld.id_map_cache[id]
+		if general then
+			table.insert(generals, general)
+		end
+	end
+	skynet.call(".general_manager", "lua", "batchUpdateGeneral", generals)
+end
+
+-- 推送将领信息
+function PUBLIC.pushGeneral(self, gid)
+	local general = ld.id_map_cache[gid]
+	if not general then
+		return
+	end
+	CMD.send2client({
+		seq = MSG_TYPE.S2C,
+		msg = general,
+		name = protoid.general_push,
+		code = error_code.success,
+	})
 end
 
 skynet.init(function () 
@@ -49,6 +95,36 @@ REQUEST[protoid.general_myGenerals] = function(self,args)
 			generals = self.generals,
 		},
 		name = protoid.general_myGenerals,
+		code = error_code.success,
+	})
+end
+-- 回收武将卡
+REQUEST[protoid.general_convert] = function(self,args)
+	local gIds = args.msg.gIds
+	local ok_gIds = {}
+	local all_add_gold = 0
+	for _, gid in ipairs(gIds) do
+		local general = ld.id_map_cache[gid]
+		if general then
+			local add_gold = 10 * general.star * (general.star_lv + 1)
+			print("回收武将", gid, add_gold,general.star,general.star_lv)
+			self.role_res.gold = self.role_res.gold + add_gold
+			general.state = GeneralState.Convert
+			table.insert(ok_gIds, gid)
+			all_add_gold = all_add_gold + add_gold
+		else
+			print("没有找到武将", gid)
+		end
+	end
+	PUBLIC.saveGenerals(self, ok_gIds)
+	CMD.send2client({
+		seq = args.seq,
+		msg = {
+			gIds = ok_gIds,
+			gold = self.role_res.gold,
+			add_gold = all_add_gold,
+		},
+		name = protoid.general_convert,
 		code = error_code.success,
 	})
 end

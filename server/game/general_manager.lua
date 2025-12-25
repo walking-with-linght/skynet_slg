@@ -15,8 +15,6 @@ local PUBLIC = base.PUBLIC
 local DATA = base.DATA
 local REQUEST = base.REQUEST
 
--- 武将状态常量
-local GeneralNormal = 0  -- 正常状态
 
 -- 内存缓存
 local genByRole = {}  -- 按角色ID索引的武将列表 {rid: {general1, general2, ...}}
@@ -43,8 +41,8 @@ local function isGeneralActive(general)
     if not general then
         return false
     end
-    -- 假设 state == GeneralNormal 表示激活
-    return general.state == GeneralNormal
+    -- 假设 state == GeneralState.Normal 表示激活
+    return general.state == GeneralState.Normal
 end
 
 -- 添加武将达到内存缓存
@@ -112,9 +110,9 @@ local function newGeneral(cfgId, rid, level)
         exp = 0, -- 经验
         order = 0,--第几队
         cityId = 0, -- 城池ID
-        star = 0, -- 稀有度(星级)
+        star = cfg.star, -- 稀有度(星级)
         star_lv = 0, -- 稀有度(星级)进阶等级级
-        arms = 0, -- 兵种
+        arms = cfg.arms[1], -- 兵种
         has_pr_point = 0, -- 总属性点
         use_pr_point = 0, -- 已用属性点
         attack_distance = 0, -- 攻击距离
@@ -126,7 +124,7 @@ local function newGeneral(cfgId, rid, level)
         parentId = 0, -- 已合成到武将的id
         compose_type = 0, -- 合成类型
         skills = cjson.encode(default_skills), -- 合成携带的技能类型
-        state = GeneralNormal, -- 0:正常，1:转换掉了
+        state = GeneralState.Normal, -- 0:正常，1:转换掉了
         created_at = os.date('%Y-%m-%d %H:%M:%S'), -- 创建时间
     }
     
@@ -139,6 +137,82 @@ local function newGeneral(cfgId, rid, level)
     general.skills = default_skills
     general.id = gid
     return general, true
+end
+
+-- 批量更新并保存武将
+function CMD.batchUpdateGeneral(generals)
+    if not generals or type(generals) ~= "table" or #generals == 0 then
+        return false, "invalid generals"
+    end
+    
+    local successCount = 0
+    local failCount = 0
+    
+    for _, generalData in ipairs(generals) do
+        if not generalData or not generalData.id then
+            failCount = failCount + 1
+            skynet.error("batchUpdateGeneral: invalid general data, missing id")
+            goto continue
+        end
+        
+        local gid = tonumber(generalData.id)
+        if not gid then
+            failCount = failCount + 1
+            skynet.error("batchUpdateGeneral: invalid general id:", generalData.id)
+            goto continue
+        end
+        
+        -- 从内存中查找武将
+        local general = genByGId[gid]
+        if not general then
+            failCount = failCount + 1
+            skynet.error("batchUpdateGeneral: general not found in memory, gid:", gid)
+            goto continue
+        end
+        
+        -- 构建更新数据（排除id字段）
+        local updateData = {}
+        local hasUpdate = false
+        
+        for key, value in pairs(generalData) do
+            if key ~= "id" then
+                -- 处理skills字段：如果是table，需要序列化为JSON
+                if key == "skills" and type(value) == "table" then
+                    updateData[key] = cjson.encode(value)
+                    general[key] = value  -- 内存中保持为table
+                else
+                    updateData[key] = value
+                    general[key] = value  -- 更新内存中的字段
+                end
+                hasUpdate = true
+            end
+        end
+        
+        -- 如果有需要更新的字段，同步到数据库
+        if hasUpdate then
+            local ok = skynet.call(".mysql", "lua", "update", "tb_general_1", 
+                "id", gid, updateData)
+            
+            if ok then
+                successCount = successCount + 1
+            else
+                failCount = failCount + 1
+                skynet.error("batchUpdateGeneral: update mysql failed, gid:", gid)
+                -- 如果数据库更新失败，可以考虑回滚内存更新，但这里为了简单不处理
+            end
+        else
+            -- 没有需要更新的字段，也算成功
+            successCount = successCount + 1
+        end
+        
+        ::continue::
+    end
+    
+    if failCount > 0 then
+        return false, string.format("success: %d, failed: %d", successCount, failCount)
+    end
+    
+    return true, string.format("success: %d", successCount)
 end
 
 -- 批量更新体力（使用CASE WHEN语句，每100条合并成一条SQL）
@@ -254,7 +328,7 @@ function CMD.load()
     -- 注意：select_by_conditions 返回 (ok, result)，如果查询成功但无结果，result 可能为 nil
     local ok, generals = skynet.call(".mysql", "lua", "select_by_conditions", 
         "tb_general_1", 
-        {state = GeneralNormal})
+        {state = GeneralState.Normal})
     
     if not ok then
         skynet.error("load generals from db failed")
@@ -313,7 +387,7 @@ function CMD.getByRId(rid)
     -- 从数据库查找
     local ok, generals = skynet.call(".mysql", "lua", "select_by_conditions", 
         "tb_general_1", 
-        {rid = rid, state = GeneralNormal})
+        {rid = rid, state = GeneralState.Normal})
     
     if ok and generals and #generals > 0 then
         -- 添加到内存
@@ -344,7 +418,7 @@ function CMD.getByGId(gid)
     -- 从数据库查找
     local ok, general = skynet.call(".mysql", "lua", "select_one_by_conditions", 
         "tb_general_1", 
-        {id = gid, state = GeneralNormal})
+        {id = gid, state = GeneralState.Normal})
     
     if ok and general then
         addGeneral(general)
