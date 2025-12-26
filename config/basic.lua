@@ -15,7 +15,7 @@ local M = {
         recovery_physical_power = 10,
         reclamation_time = 30,
         reclamation_cost = 1,
-        draw_general_cost = 30,
+        draw_general_cost = 30, -- 抽卡消耗
         pr_point = 1000,
         limit = 500
     },

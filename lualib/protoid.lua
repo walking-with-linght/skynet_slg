@@ -42,4 +42,12 @@ return {
     general_lvSkill = "general.lvSkill",
     -- 回收武将卡
     general_convert = "general.convert",
+    -- 抽卡 单抽
+    general_drawGeneral = "general.drawGeneral",
+    -- 城市设施
+    city_facilities = "city.facilities",
+    -- 升级设施
+    city_upFacility = "city.upFacility",
+    -- 市场
+    interior_transform = "interior.transform",
 }

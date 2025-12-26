@@ -343,4 +343,15 @@ table.contains = function(table, value)
     return false
 end
 
+
+-- 获取今日0点时间戳
+function _M.getToday0Timestamp(currentTime)
+    currentTime = currentTime or os.time()
+    local currentDate = os.date("*t", currentTime)
+    currentDate.hour = 0
+    currentDate.min = 0
+    currentDate.sec = 0
+    return os.time(currentDate)
+end
+
 return _M

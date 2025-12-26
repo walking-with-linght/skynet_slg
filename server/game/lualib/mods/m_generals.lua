@@ -6,6 +6,7 @@ local event = require "event"
 local protoid = require "protoid"
 local error_code = require "error_code"
 local cjson = require "cjson"
+local sharedata = require "skynet.sharedata"
 
 local DATA = base.DATA --本服务使用的表
 local CMD = base.CMD  --供其他服务调用的接口
@@ -125,6 +126,61 @@ REQUEST[protoid.general_convert] = function(self,args)
 			add_gold = all_add_gold,
 		},
 		name = protoid.general_convert,
+		code = error_code.success,
+	})
+end
+
+-- 抽卡 单抽
+REQUEST[protoid.general_drawGeneral] = function(self,args)
+	local drawTimes = args.msg.drawTimes
+	if drawTimes <= 0 then
+		return
+	end
+	local basic_config = sharedata.query("config/basic.lua")
+	local cost = drawTimes * basic_config.general.draw_general_cost
+	-- 判断金币是否足够
+	if self.role_res.gold < cost then
+		CMD.send2client({
+			seq = args.seq,
+			name = protoid.general_drawGeneral,
+			code = error_code.GoldNotEnough,
+		})
+		return
+	end
+	-- 武将数量限制
+	if #self.generals >= basic_config.general.limit then
+		CMD.send2client({
+			seq = args.seq,
+			name = protoid.general_drawGeneral,
+			code = error_code.OutGeneralLimit,
+		})
+		return
+	end
+	self.role_res.gold = self.role_res.gold - cost
+
+	local new_generals,ok = skynet.call(".general_manager", "lua", "randCreateGeneral", self.rid,drawTimes)
+	if not ok then
+		CMD.send2client({
+			seq = args.seq,
+			name = protoid.general_drawGeneral,
+			code = error_code.DBError,
+		})
+		return
+	end
+	local new_ids = {}
+	-- 添加到内存缓存
+	for _, general in ipairs(new_generals) do
+		table.insert(self.generals, general)
+		ld.id_map_cache[general.id] = general
+		table.insert(new_ids, general.id)
+	end
+	PUBLIC.saveGenerals(self, new_ids)
+	CMD.send2client({
+		seq = args.seq,
+		msg = {
+			generals = new_generals,
+		},
+		name = protoid.general_drawGeneral,
 		code = error_code.success,
 	})
 end

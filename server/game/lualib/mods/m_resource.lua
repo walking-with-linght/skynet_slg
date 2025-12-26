@@ -78,6 +78,32 @@ skynet.init(function ()
 	event:register("leave",lf.leave)
 end)
 
+
+function PUBLIC.updateRoleRes(self, res_map)
+	for k,v in pairs(res_map) do
+		self.role_res[k] = v
+	end
+	PUBLIC.saveRoleRes(self)
+end
+
+function PUBLIC.updateRoleAttr(self, attr_map)
+	for k,v in pairs(attr_map) do
+		self.role_attr[k] = v
+	end
+	skynet.call(".mysql", "lua", "update", "tb_role_attribute_1",  "rid", self.rid, attr_map)
+end
+-- 修改资源
+function PUBLIC.modifyRoleRes(self, res_map)
+	for k,v in pairs(res_map) do
+		self.role_res[k] = self.role_res[k] + v
+	end
+	PUBLIC.saveRoleRes(self)
+end
+-- 保存资源
+function PUBLIC.saveRoleRes(self)
+	skynet.call(".mysql", "lua", "update", "tb_role_res_1",  "rid", self.rid, self.role_res)
+end
+
 -- 征收资源进度
 REQUEST[protoid.interior_openCollect] = function(self,args)
 	local role_res_config = sharedata.query("config/basic.lua")
@@ -90,7 +116,13 @@ REQUEST[protoid.interior_openCollect] = function(self,args)
 	else
 		cur_times = self.role_attr.collect_times
 		limit = role_res_config.role.collect_times_limit
-		next_time =utils.date2timestamp(self.role_attr.last_collect_time)*1000 + role_res_config.role.collect_interval
+
+		if cur_times >= limit then
+			next_time = (utils.getToday0Timestamp() + 24*3600 ) *1000 
+		else
+			next_time =utils.date2timestamp(self.role_attr.last_collect_time)*1000 + role_res_config.role.collect_interval
+		end
+		
 	end
 	CMD.send2client({
 		seq = args.seq,
@@ -125,18 +157,29 @@ REQUEST[protoid.interior_collect] = function(self,args)
 	local add_gold = role_res_config.role.gold_yield
 	self.role_res.gold = self.role_res.gold + add_gold
 	self.role_res.collect_times = cur_collect_times
+	self.role_attr.last_collect_time = os.date("%Y-%m-%d %H:%M:%S")
+	PUBLIC.updateRoleRes(self, {
+		gold = add_gold,
+	})
+	PUBLIC.updateRoleAttr(self, {
+		collect_times = cur_collect_times,
+		last_collect_time = self.role_attr.last_collect_time,
+	})
 	-- 更新征收次数
 	skynet.call(".mysql", "lua", "update", "tb_role_attribute_1",  "rid", self.rid, {
-		collect_times = cur_collect_times,
-		last_collect_time = os.date("%Y-%m-%d %H:%M:%S"),
+		last_collect_time = self.role_attr.last_collect_time,
 	})
+	local next_time = os.time()*1000 + role_res_config.role.collect_interval
+	if cur_collect_times >= role_res_config.role.collect_times_limit then
+		next_time = (utils.getToday0Timestamp() + 24*3600 ) *1000 
+	end
 	CMD.send2client({
 		seq = args.seq,
 		msg = {
 			limit = role_res_config.role.collect_times_limit,
 			cur_times = cur_collect_times,
 			gold = add_gold,
-			next_time = os.time()*1000 + role_res_config.role.collect_interval,
+			next_time = next_time,
 		},
 		name = protoid.interior_collect,
 		code = error_code.success,

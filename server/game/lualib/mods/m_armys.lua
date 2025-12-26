@@ -39,13 +39,7 @@ end)
 
 -- 武将信息
 REQUEST[protoid.army_myList] = function(self,args)
-	local cityId = 0
-	for _,city in ipairs(self.citys) do
-		if city.is_main then
-			cityId = city.id
-			break
-		end
-	end
+	local cityId = self.main_cityId
 	CMD.send2client({
 		seq = args.seq,
 		msg = {

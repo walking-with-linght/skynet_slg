@@ -23,16 +23,17 @@ function lf.load(self)
     if not citys or #citys == 0 then
         -- 创建主城池
         local ok, city = skynet.call(".map_manager", "lua", "findAndCreateMainCity", {rid = self.rid,nick_name = self.role.nick_name})
-        if ok then
-            city.is_main = city.is_main == 1 and true or false
-            citys = {city}
-        else
-            skynet.error("创建主城池失败:", city)
-            citys = {}
-        end
+        assert(ok, "创建主城池失败")
+        citys = {city}
     end
+    local main_cityId = 0
     for _,city in ipairs(citys) do
-        city.is_main = city.is_main == 1 and true or false
+        if city.is_main == 1 then
+            main_cityId = city.cityId
+            city.is_main = true
+        else
+            city.is_main = false
+        end
         city.max_durable = city.max_durable or 100000
         city.level = city.level or 1
         city.parent_id = city.parent_id or 0
@@ -45,6 +46,7 @@ function lf.load(self)
     -- union_id
     -- union_name
     self.citys = citys or {}
+    self.main_cityId = main_cityId
 end
 function lf.loaded(self)
 
