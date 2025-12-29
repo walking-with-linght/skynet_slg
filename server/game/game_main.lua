@@ -71,6 +71,7 @@ skynet.start(function()
 	skynet.newservice("agent_manager")
     skynet.newservice("general_manager")
     skynet.newservice("map_manager")
+    skynet.newservice("chat_manager")
 
 
 

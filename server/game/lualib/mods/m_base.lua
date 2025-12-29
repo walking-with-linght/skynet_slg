@@ -9,6 +9,7 @@ local sessionlib = require "session"
 local time = require "time"
 local protoid = require "protoid"
 local utils = require "utils"
+local cjson = require "cjson"
 
 local DATA = base.DATA --本服务使用的表
 local CMD = base.CMD  --供其他服务调用的接口
@@ -19,21 +20,25 @@ local NM = "base"
 
 local lf = base.LocalFunc(NM)
 local ld = base.LocalData(NM,{
-	db = {},--需要存库的数据
+	-- db 字段定义表，格式: {field_name = "type", ...}
+	-- 支持的类型: "int", "string", "json", "float", "datetime"
+	-- 示例: {rid = "int", jsondata = "json", name = "string"}
+	db = {
+		uid = "int",
+		headId = "int",
+		sex = "int",
+		nick_name = "string",
+		balance = "int",
+		login_time = "string",
+		logout_time = "string",
+		created_at = "string",
+		profile = "string",
+	},
+	table_name = "tb_role_1",
 })
 
-local db = ld.db
-
 function lf.load(self)
-	-- local key = PUBLIC.get_db_key(self.rid)
-	-- local cache = Common.redisExecute({"hget",key,NM},Redis_DB.game)
-	-- if cache then
-	-- 	db = util.db_decode(cache)
-	-- end
-	
-	-- 基础数据
-	local ok,role = skynet.call(".mysql", "lua", "select_one_by_key", "tb_role_1", "rid", self.rid)
-	assert(ok)
+	local ok,role = PUBLIC.loadDbData(ld.table_name, "rid", self.rid, ld.db)
 	role.nickName = role.nick_name
 	-- 基础数据
 	self.role = role
@@ -62,7 +67,10 @@ function lf.enter(self, seq)
 	})
 end
 function lf.leave(self)
-	rlog("rid base-mod leave")
+end
+
+function lf.save(self)
+	PUBLIC.saveDbData(ld.table_name, "rid", self.rid, self.role, ld.db)
 end
 
 skynet.init(function () 
@@ -70,7 +78,32 @@ skynet.init(function ()
 	event:register("loaded",lf.loaded)
 	event:register("enter",lf.enter)
 	event:register("leave",lf.leave)
+	event:register("save", lf.save)
 end)
+
+function PUBLIC.parseRoleRes(self)
+	local role_res_config = sharedata.query("config/basic.lua")
+	local pack_role_res = {
+		depot_capacity = role_res_config.role.depot_capacity,
+		gold_yield = role_res_config.role.gold_yield,
+		grain_yield = role_res_config.role.grain_yield,
+		iron_yield = role_res_config.role.iron_yield,
+		stone_yield = role_res_config.role.stone_yield,
+		wood_yield = role_res_config.role.wood_yield,
+	}
+	table.merge(pack_role_res, self.role_res)
+	return pack_role_res
+end
+
+function PUBLIC.pushRoleRes(self)
+	CMD.send2client({
+		seq = 0,
+		msg = PUBLIC.parseRoleRes(self),
+		name = protoid.roleRes_push,
+		code = error_code.success,
+	})
+end
+
 
 -------client-------
 function REQUEST:heartbeat()
@@ -126,4 +159,40 @@ REQUEST[protoid.role_posTagList] = function(self,args)
 		code = error_code.success,
 	})
 end
-
+-- 标记坐标
+REQUEST[protoid.role_opPosTag] = function(self,args)
+	local pos_tags = self.role_attr.pos_tags
+	-- args.msg.type 1=标记，0=取消标记
+	if args.msg.type == 1 then -- 标记
+		local is_exist = false
+		for i,v in ipairs(pos_tags) do
+			if v.x == args.msg.x and v.y == args.msg.y then
+				return CMD.send2client({
+					seq = args.seq,
+					name = protoid.role_opPosTag,
+					code = error_code.InvalidParam,
+				})
+			end
+		end
+		table.insert(pos_tags, args.msg)
+	else -- 取消标记
+		for i,v in ipairs(pos_tags) do
+			if v.x == args.msg.x and v.y == args.msg.y then
+				table.remove(pos_tags, i)
+				break
+			end
+		end
+	end
+	self.role_attr.pos_tags = pos_tags
+	CMD.send2client({
+		seq = args.seq,
+		msg = {
+			type = args.msg.type,
+			x = args.msg.x,
+			y = args.msg.y,
+			name = args.msg.name,
+		},
+		name = protoid.role_posTagList,
+		code = error_code.success,
+	})
+end

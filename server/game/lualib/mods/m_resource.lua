@@ -92,6 +92,16 @@ function PUBLIC.updateRoleAttr(self, attr_map)
 	end
 	skynet.call(".mysql", "lua", "update", "tb_role_attribute_1",  "rid", self.rid, attr_map)
 end
+
+-- 更新客户端
+function PUBLIC.updateClientRoleRes(self)
+	CMD.send2client({
+		seq = 0,
+		msg = self.role_res,
+		name = protoid.role_res,
+		code = error_code.success,
+	})
+end
 -- 修改资源
 function PUBLIC.modifyRoleRes(self, res_map)
 	for k,v in pairs(res_map) do
@@ -101,7 +111,15 @@ function PUBLIC.modifyRoleRes(self, res_map)
 end
 -- 保存资源
 function PUBLIC.saveRoleRes(self)
-	skynet.call(".mysql", "lua", "update", "tb_role_res_1",  "rid", self.rid, self.role_res)
+	local save_data = {
+		wood = self.role_res.wood,
+		iron = self.role_res.iron,
+		stone = self.role_res.stone,
+		grain = self.role_res.grain,
+		gold = self.role_res.gold,
+		decree = self.role_res.decree,
+	}
+	skynet.call(".mysql", "lua", "update", "tb_role_res_1",  "rid", self.rid, save_data)
 end
 
 -- 征收资源进度

@@ -54,3 +54,16 @@ Market_Type_Server = {
     [Market_Type.TypeStone] = "stone",
     [Market_Type.TypeGrain] = "grain",
 }
+
+Chat_Type = {
+    World = 0,
+    Guild = 1,
+    Private = 2,
+    System = 3,
+}
+Chat_Type_Server = {
+    [Chat_Type.World] = "World",
+    [Chat_Type.Guild] = "Guild",
+    [Chat_Type.Private] = "Private",
+    [Chat_Type.System] = "System",
+}

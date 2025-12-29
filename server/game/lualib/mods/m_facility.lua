@@ -273,8 +273,9 @@ REQUEST[protoid.interior_transform] = function(self,args)
 	end
 	-- 计算转换比例
 	local convert_rate = add_rate / 100
-	print("转换比例", convert_rate)
+	
 	local source_res = self.role_res[Market_Type_Server[source.type]]
+	print("转换比例", convert_rate,source.type,Market_Type_Server[source.type],source_res, source.value)
 	if source_res < source.value then
 		return CMD.send2client({
 			seq = args.seq,
@@ -286,5 +287,10 @@ REQUEST[protoid.interior_transform] = function(self,args)
 	self.role_res[Market_Type_Server[source.type]] = source_res - source.value
 	self.role_res[Market_Type_Server[target.type]] = target_res + math.ceil((source.value * convert_rate)/100)-- 向上取整
 	PUBLIC.saveRoleRes(self)
-	
+	PUBLIC.pushRoleRes(self)
+	CMD.send2client({
+		seq = args.seq,
+		name = protoid.interior_transform,
+		code = error_code.success,
+	})
 end

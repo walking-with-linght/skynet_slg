@@ -2,6 +2,7 @@ local skynet = require "skynet"
 local cluster = require "skynet.cluster"
 local Timer = require "utils.timer"
 local basefunc = require "basefunc"
+local cjson = require "cjson"
 require "skynet.manager"
 local base = {
 
@@ -39,6 +40,127 @@ function base.LocalFunc(_module_name,_default)
     PUBLIC[_name] = PUBLIC[_name] or _default or {}
     return PUBLIC[_name]
 end
+
+
+--[[
+根据字段类型定义，从数据库加载数据并自动处理JSON字段
+参数:
+	self: 角色对象
+	table_name: MySQL表名
+	key_field: 主键字段名（如 "rid"）
+	key_value: 主键值
+	db_schema: 字段类型定义表，格式: {field_name = "type", ...}
+	          支持的类型: "int", "string", "json", "float", "datetime"
+	          示例: {rid = "int", jsondata = "json", name = "string"}
+返回值:
+	data: 加载的数据（已自动处理JSON字段）
+	ok: 是否加载成功
+示例:
+	local db_schema = {
+		rid = "int",
+		pos_tags = "json",
+		collect_times = "int",
+	}
+	local data, ok = PUBLIC.loadDbData(self, "tb_role_attribute_1", "rid", self.rid, db_schema)
+]]
+function PUBLIC.loadDbData(table_name, key_field, key_value, db_schema)
+	if not db_schema or not next(db_schema) then
+		elog("loadDbData: db_schema is required")
+		return nil, false
+	end
+	
+	local ok, data = skynet.call(".mysql", "lua", "select_one_by_key", table_name, key_field, key_value)
+	if not ok or not data then
+		return nil, false
+	end
+	
+	-- 根据字段类型自动处理
+	for field_name, field_type in pairs(db_schema) do
+		if data[field_name] ~= nil then
+			if field_type == "json" then
+				-- JSON字段自动解码
+				if type(data[field_name]) == "string" and data[field_name] ~= "" then
+					local decode_ok, decoded = pcall(cjson.decode, data[field_name])
+					if decode_ok then
+						data[field_name] = decoded
+					else
+						elog("loadDbData: json decode failed", field_name, data[field_name])
+						data[field_name] = {}
+					end
+				elseif data[field_name] == "" or data[field_name] == nil then
+					data[field_name] = {}
+				end
+			elseif field_type == "int" then
+				-- 确保是整数类型
+				data[field_name] = tonumber(data[field_name]) or 0
+			elseif field_type == "float" then
+				-- 确保是浮点数类型
+				data[field_name] = tonumber(data[field_name]) or 0.0
+			end
+		end
+	end
+	
+	return data, true
+end
+
+--[[
+根据字段类型定义，保存数据到数据库并自动处理JSON字段
+参数:
+	self: 角色对象
+	table_name: MySQL表名
+	key_field: 主键字段名（如 "rid"）
+	key_value: 主键值
+	data: 要保存的数据表
+	db_schema: 字段类型定义表，格式: {field_name = "type", ...}
+	          支持的类型: "int", "string", "json", "float", "datetime"
+返回值:
+	ok: 是否保存成功
+示例:
+	local db_schema = {
+		rid = "int",
+		pos_tags = "json",
+		collect_times = "int",
+	}
+	local save_data = {
+		pos_tags = self.role_attr.pos_tags,  -- 会自动编码为JSON
+		collect_times = self.role_attr.collect_times,
+	}
+	local ok = PUBLIC.saveDbData(self, "tb_role_attribute_1", "rid", self.rid, save_data, db_schema)
+]]
+function PUBLIC.saveDbData(table_name, key_field, key_value, data, db_schema)
+	if not data or not next(data) then
+		elog("saveDbData: data is empty")
+		return false
+	end
+	
+	-- 根据字段类型自动处理
+	local save_data = {}
+	for field_name, value in pairs(data) do
+		if db_schema and db_schema[field_name] then
+			if db_schema[field_name] == "json" then
+				-- JSON字段自动编码
+				if type(value) == "table" then
+					save_data[field_name] = cjson.encode(value)
+				elseif type(value) == "string" then
+					-- 如果已经是字符串，尝试解码再编码以确保格式正确
+					local decode_ok, decoded = pcall(cjson.decode, value)
+					if decode_ok then
+						save_data[field_name] = cjson.encode(decoded)
+					else
+						save_data[field_name] = value
+					end
+				else
+					save_data[field_name] = cjson.encode(value or {})
+				end
+			end	
+		end
+	end
+	
+	local ok = skynet.call(".mysql", "lua", "update", table_name, key_field, key_value, save_data)
+	return ok
+end
+
+
 
 ---- add by wss
 --- 操作锁

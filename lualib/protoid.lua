@@ -50,4 +50,16 @@ return {
     city_upFacility = "city.upFacility",
     -- 市场
     interior_transform = "interior.transform",
+    -- 更新角色数据
+    roleRes_push = "roleRes.push",
+    -- 聊天历史
+    chat_history = "chat.history",
+    -- 聊天消息
+    chat_chat = "chat.chat",
+    -- 聊天推送
+    chat_push = "chat.push",
+    -- 退出聊天
+    chat_exit = "chat.exit",
+    -- 标记坐标
+    role_opPosTag = "role.opPosTag",
 }
