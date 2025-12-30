@@ -109,7 +109,7 @@ REQUEST[protoid.general_convert] = function(self,args)
 		if general then
 			local add_gold = 10 * general.star * (general.star_lv + 1)
 			print("回收武将", gid, add_gold,general.star,general.star_lv)
-			self.role_res.gold = self.role_res.gold + add_gold
+			self.resource.gold = self.resource.gold + add_gold
 			general.state = GeneralState.Convert
 			table.insert(ok_gIds, gid)
 			all_add_gold = all_add_gold + add_gold
@@ -122,7 +122,7 @@ REQUEST[protoid.general_convert] = function(self,args)
 		seq = args.seq,
 		msg = {
 			gIds = ok_gIds,
-			gold = self.role_res.gold,
+			gold = self.resource.gold,
 			add_gold = all_add_gold,
 		},
 		name = protoid.general_convert,
@@ -139,7 +139,7 @@ REQUEST[protoid.general_drawGeneral] = function(self,args)
 	local basic_config = sharedata.query("config/basic.lua")
 	local cost = drawTimes * basic_config.general.draw_general_cost
 	-- 判断金币是否足够
-	if self.role_res.gold < cost then
+	if self.resource.gold < cost then
 		CMD.send2client({
 			seq = args.seq,
 			name = protoid.general_drawGeneral,
@@ -156,7 +156,7 @@ REQUEST[protoid.general_drawGeneral] = function(self,args)
 		})
 		return
 	end
-	self.role_res.gold = self.role_res.gold - cost
+	self.resource.gold = self.resource.gold - cost
 
 	local new_generals,ok = skynet.call(".general_manager", "lua", "randCreateGeneral", self.rid,drawTimes)
 	if not ok then

@@ -19,6 +19,15 @@ local REQUEST = base.REQUEST
 local NM = "skill"
 
 local lf = base.LocalFunc(NM)
+local ld = base.LocalData(NM,{
+	db = {
+		rid = "int",
+		cfgId = "int",
+		belong_generals = "json",
+		ctime = "string",
+	},
+	table_name = "tb_skill_1",
+})
 
 local all_skills = {
 	path = {
@@ -36,8 +45,8 @@ function lf.load(self)
 		local config = sharedata.query(path)
 		all_skills.map[config.cfgId] = config
 	end
-	local ok,skills  = skynet.call(".mysql", "lua", "select_by_conditions", "tb_skill_1", {rid = self.rid})
-	if ok and skills and #skills > 0 then
+	local skills,ok  = PUBLIC.loadDbData(ld.table_name, "rid", self.rid, ld.db)
+	if ok and next(skills) then
 		-- print("load skills from mysql",dump(skills))
 		for _, skill in pairs(skills) do
 			skill.belong_generals = cjson.decode(skill.belong_generals)
@@ -74,6 +83,13 @@ function lf.enter(self, seq)
 end
 function lf.leave(self)
 
+end
+function lf.save(self,m_name)
+	if m_name  == NM then
+		for cfgId, skill in pairs(self.skills) do
+			skynet.call(".mysql", "lua", "execute", string.format("update %s set %s where %s = %d and %s = %d", ld.table_name, cjson.encode(skill), "cfgId", cfgId, "rid", self.rid))
+		end
+	end
 end
 
 skynet.init(function () 
@@ -162,6 +178,7 @@ REQUEST[protoid.general_downSkill] = function(self,msg)
 	})
 	PUBLIC.saveGeneral(self, msg.msg.gId)
 	PUBLIC.pushGeneral(self,msg.msg.gId)
+	lf.save(self, NM)
 end
 -- 装备技能
 REQUEST[protoid.general_upSkill] = function(self,msg)
@@ -261,6 +278,7 @@ REQUEST[protoid.general_upSkill] = function(self,msg)
 	})
 	PUBLIC.saveGeneral(self, msg.msg.gId)
 	PUBLIC.pushGeneral(self,msg.msg.gId)
+	lf.save(self, NM)
 end
 
 -- 升级技能

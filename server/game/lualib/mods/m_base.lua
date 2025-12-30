@@ -24,6 +24,7 @@ local ld = base.LocalData(NM,{
 	-- 支持的类型: "int", "string", "json", "float", "datetime"
 	-- 示例: {rid = "int", jsondata = "json", name = "string"}
 	db = {
+		rid = "int",
 		uid = "int",
 		headId = "int",
 		sex = "int",
@@ -38,10 +39,12 @@ local ld = base.LocalData(NM,{
 })
 
 function lf.load(self)
-	local ok,role = PUBLIC.loadDbData(ld.table_name, "rid", self.rid, ld.db)
+	local role,ok = PUBLIC.loadDbData(ld.table_name, "rid", self.rid, ld.db)
+	role = role[1]
 	role.nickName = role.nick_name
 	-- 基础数据
 	self.role = role
+	print("load role",dump(role))
 end
 function lf.loaded(self)
 	rlog("rid base-mod loaded")
@@ -58,7 +61,7 @@ function lf.enter(self, seq)
 		seq = seq,
 		msg = {
 			role = self.role,
-			role_res = self.role_res,
+			role_res = self.resource,
 			time = math.floor(time.gettime() / 10),
 			token = session,
 		},
@@ -69,8 +72,10 @@ end
 function lf.leave(self)
 end
 
-function lf.save(self)
-	PUBLIC.saveDbData(ld.table_name, "rid", self.rid, self.role, ld.db)
+function lf.save(self,m_name)
+	if m_name  == NM then
+		PUBLIC.saveDbData(ld.table_name, "rid", self.rid, self.role, ld.db)
+	end
 end
 
 skynet.init(function () 
@@ -91,7 +96,7 @@ function PUBLIC.parseRoleRes(self)
 		stone_yield = role_res_config.role.stone_yield,
 		wood_yield = role_res_config.role.wood_yield,
 	}
-	table.merge(pack_role_res, self.role_res)
+	table.merge(pack_role_res, self.resource)
 	return pack_role_res
 end
 
@@ -134,7 +139,7 @@ REQUEST[protoid.nrole_myProperty] = function(self,args)
 		stone_yield = role_res_config.role.stone_yield,
 		wood_yield = role_res_config.role.wood_yield,
 	}
-	table.merge(pack_role_res, self.role_res)
+	table.merge(pack_role_res, self.resource)
 	local pack = {
 		armys = self.armys,
 		citys = self.citys,
@@ -154,14 +159,14 @@ end
 REQUEST[protoid.role_posTagList] = function(self,args)
 	CMD.send2client({
 		seq = args.seq,
-		msg = self.role_attr.pos_tags,
+		msg = self.attr.pos_tags,
 		name = protoid.role_posTagList,
 		code = error_code.success,
 	})
 end
 -- 标记坐标
 REQUEST[protoid.role_opPosTag] = function(self,args)
-	local pos_tags = self.role_attr.pos_tags
+	local pos_tags = self.attr.pos_tags
 	-- args.msg.type 1=标记，0=取消标记
 	if args.msg.type == 1 then -- 标记
 		local is_exist = false
@@ -183,7 +188,7 @@ REQUEST[protoid.role_opPosTag] = function(self,args)
 			end
 		end
 	end
-	self.role_attr.pos_tags = pos_tags
+	self.attr.pos_tags = pos_tags
 	CMD.send2client({
 		seq = args.seq,
 		msg = {

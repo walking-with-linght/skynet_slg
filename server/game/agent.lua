@@ -57,13 +57,16 @@ function lf.load(rid)
 		assert(ROLE.STATE == role_state.unload)
 		ROLE.STATE = role_state.loaded
 	end)
+	print("agent_load",dump(ROLE))
 	event:dispatch("load",ROLE)
 	event:dispatch("loaded",ROLE)
 	ROLE.STATE = role_state.unload
+	print("agent_load end")
 	return
 end
 
 function lf.enter(args,gate_link)
+	print("agent_enter",dump(args),dump(gate_link))
 	assert(ROLE.STATE == role_state.loaded or ROLE.STATE == role_state.online)
 
 	local fd = gate_link.fd

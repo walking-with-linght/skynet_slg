@@ -15,11 +15,26 @@ local REQUEST = base.REQUEST
 local NM = "citys"
 
 local lf = base.LocalFunc(NM)
+local ld = base.LocalData(NM,{
+	db = {
+        rid = "int",
+		cityId = "int",
+		x = "int",
+		y = "int",
+		name = "string",
+		is_main = "int",
+		cur_durable = "int",
+		created_at = "string",
+		occupy_time = "string",
+	},
+	table_name = "tb_map_role_city_1",
+})
 
 
 
 function lf.load(self)
-    local ok,citys = skynet.call(".mysql", "lua", "select_by_key", "tb_map_role_city_1", "rid", self.rid)
+    local citys,ok = PUBLIC.loadDbData(ld.table_name, "rid", self.rid, ld.db)
+	assert(ok)
     if not citys or #citys == 0 then
         -- 创建主城池
         local ok, city = skynet.call(".map_manager", "lua", "findAndCreateMainCity", {rid = self.rid,nick_name = self.role.nick_name})
@@ -30,9 +45,9 @@ function lf.load(self)
     for _,city in ipairs(citys) do
         if city.is_main == 1 then
             main_cityId = city.cityId
-            city.is_main = true
+            -- city.is_main = true
         else
-            city.is_main = false
+            -- city.is_main = false
         end
         city.max_durable = city.max_durable or 100000
         city.level = city.level or 1
@@ -45,7 +60,7 @@ function lf.load(self)
     -- parent_id
     -- union_id
     -- union_name
-    self.citys = citys or {}
+    self.citys = citys
     self.main_cityId = main_cityId
 end
 function lf.loaded(self)
@@ -58,12 +73,19 @@ function lf.leave(self)
 
 end
 
+function lf.save(self,m_name)
+	if m_name  == NM then
+		-- PUBLIC.saveDbData(ld.table_name, "rid", self.rid, self.citys, ld.db)
+	end
+	-- PUBLIC.saveDbData(ld.table_name, "rid", self.rid, self.citys, ld.db)
+end
 
 skynet.init(function () 
 	event:register("load",lf.load)
 	event:register("loaded",lf.loaded)
 	event:register("enter",lf.enter)
 	event:register("leave",lf.leave)
+	event:register("save", lf.save)
 end)
 
 -- 战报

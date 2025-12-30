@@ -16,7 +16,7 @@ local CMD = base.CMD  --供其他服务调用的接口
 local PUBLIC = base.PUBLIC --本服务调用的接口
 local REQUEST = base.REQUEST
 
-local NM = "base"
+local NM = "attr"
 
 local lf = base.LocalFunc(NM)
 local ld = base.LocalData(NM,{
@@ -34,8 +34,8 @@ local ld = base.LocalData(NM,{
 })
 
 function lf.load(self)
-	local ok,attr = PUBLIC.loadDbData(ld.table_name, "rid", self.rid, ld.db)
-    if not ok or not next(attr) then
+	local attr,ok = PUBLIC.loadDbData(ld.table_name, "rid", self.rid, ld.db)
+    if not attr[1] or not next(attr[1]) then
         attr = {
             rid = self.rid,
             parent_id = 0,
@@ -45,8 +45,10 @@ function lf.load(self)
         }
         local ok = skynet.call(".mysql", "lua", "insert", ld.table_name, attr)
         assert(ok)
-    end
-	self.attr = attr
+		self.attr = attr
+    else
+		self.attr = attr[1]
+	end
 end
 function lf.loaded(self)
 end
@@ -56,8 +58,10 @@ end
 function lf.leave(self)
 end
 
-function lf.save(self)
-	PUBLIC.saveDbData(ld.table_name, "rid", self.rid, self.role, ld.db)
+function lf.save(self,m_name)
+	if m_name  == NM then
+		PUBLIC.saveDbData(ld.table_name, "rid", self.rid, self.attr, ld.db)
+	end
 end
 
 skynet.init(function () 
@@ -68,3 +72,9 @@ skynet.init(function ()
 	event:register("save", lf.save)
 end)
 
+function PUBLIC.updateRoleAttr(self, attr_map)
+	for k,v in pairs(attr_map or {}) do
+		self.attr[k] = v
+	end
+	lf.save(self, NM)
+end

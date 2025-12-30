@@ -3,6 +3,7 @@ local cluster = require "skynet.cluster"
 local Timer = require "utils.timer"
 local basefunc = require "basefunc"
 local cjson = require "cjson"
+local mysql = require "skynet.db.mysql"
 require "skynet.manager"
 local base = {
 
@@ -69,7 +70,7 @@ function PUBLIC.loadDbData(table_name, key_field, key_value, db_schema)
 		return nil, false
 	end
 	
-	local ok, data = skynet.call(".mysql", "lua", "select_one_by_key", table_name, key_field, key_value)
+	local ok, data = skynet.call(".mysql", "lua", "select_by_key", table_name, key_field, key_value)
 	if not ok or not data then
 		return nil, false
 	end
@@ -105,8 +106,8 @@ end
 
 --[[
 根据字段类型定义，保存数据到数据库并自动处理JSON字段
+使用 INSERT ... ON DUPLICATE KEY UPDATE 一条SQL语句完成插入或更新
 参数:
-	self: 角色对象
 	table_name: MySQL表名
 	key_field: 主键字段名（如 "rid"）
 	key_value: 主键值
@@ -122,42 +123,135 @@ end
 		collect_times = "int",
 	}
 	local save_data = {
-		pos_tags = self.role_attr.pos_tags,  -- 会自动编码为JSON
-		collect_times = self.role_attr.collect_times,
+		rid = self.rid,  -- 必须包含主键
+		pos_tags = self.attr.pos_tags,  -- 会自动编码为JSON
+		collect_times = self.attr.collect_times,
 	}
-	local ok = PUBLIC.saveDbData(self, "tb_role_attribute_1", "rid", self.rid, save_data, db_schema)
+	local ok = PUBLIC.saveDbData("tb_role_attribute_1", "rid", self.rid, save_data, db_schema)
 ]]
 function PUBLIC.saveDbData(table_name, key_field, key_value, data, db_schema)
-	if not data or not next(data) then
-		elog("saveDbData: data is empty")
+	if not db_schema or not next(db_schema) then
+		elog("saveDbData: db_schema is required and cannot be empty")
 		return false
 	end
 	
-	-- 根据字段类型自动处理
-	local save_data = {}
-	for field_name, value in pairs(data) do
-		if db_schema and db_schema[field_name] then
-			if db_schema[field_name] == "json" then
-				-- JSON字段自动编码
-				if type(value) == "table" then
-					save_data[field_name] = cjson.encode(value)
-				elseif type(value) == "string" then
-					-- 如果已经是字符串，尝试解码再编码以确保格式正确
-					local decode_ok, decoded = pcall(cjson.decode, value)
-					if decode_ok then
-						save_data[field_name] = cjson.encode(decoded)
-					else
-						save_data[field_name] = value
-					end
-				else
-					save_data[field_name] = cjson.encode(value or {})
-				end
-			end	
-		end
+	-- 确保主键字段在 db_schema 中定义
+	if not db_schema[key_field] then
+		elog("saveDbData: key_field '%s' must be defined in db_schema", key_field)
+		return false
 	end
 	
-	local ok = skynet.call(".mysql", "lua", "update", table_name, key_field, key_value, save_data)
-	return ok
+	-- 确保主键字段包含在数据中
+	if not data then
+		data = {}
+	end
+	data[key_field] = key_value
+	
+	-- 只遍历 db_schema 中定义的字段
+	local save_data = {}
+	local cols = {}
+	local vals = {}
+	local updates = {}
+	
+	for field_name, field_type in pairs(db_schema) do
+		-- 从 data 中获取字段值，如果不存在则根据类型设置默认值
+		local value = data[field_name]
+		local processed_value
+		local is_string = false
+		
+		-- 根据字段类型处理
+		if field_type == "json" then
+			-- JSON字段自动编码
+			if value == nil then
+				processed_value = cjson.encode({})
+				is_string = true
+			elseif type(value) == "table" then
+				processed_value = cjson.encode(value)
+				is_string = true
+			elseif type(value) == "string" then
+				-- 如果已经是字符串，尝试解码再编码以确保格式正确
+				local decode_ok, decoded = pcall(cjson.decode, value)
+				if decode_ok then
+					processed_value = cjson.encode(decoded)
+				else
+					processed_value = value
+				end
+				is_string = true
+			else
+				processed_value = cjson.encode(value or {})
+				is_string = true
+			end
+		elseif field_type == "int" or field_type == "float" then
+			-- 数值类型，确保是数字
+			if value == nil then
+				processed_value = 0
+			else
+				processed_value = tonumber(value) or 0
+			end
+			is_string = false
+		else
+			-- string 和 datetime 类型
+			if value == nil then
+				processed_value = ""
+			else
+				processed_value = tostring(value)
+			end
+			is_string = true
+		end
+		
+		-- 字符串类型需要转义，数值类型直接使用
+		local sql_value
+		if is_string then
+			sql_value = mysql.quote_sql_str(processed_value)
+		else
+			sql_value = tostring(processed_value)
+		end
+		
+		table.insert(cols, "`" .. field_name .. "`")
+		table.insert(vals, sql_value)
+		
+		-- 主键字段不参与更新部分
+		if field_name ~= key_field then
+			table.insert(updates, "`" .. field_name .. "`=" .. sql_value)
+		end
+		
+		save_data[field_name] = processed_value
+	end
+	
+	-- 构建 INSERT ... ON DUPLICATE KEY UPDATE SQL
+	if #cols == 0 then
+		elog("saveDbData: no fields to save")
+		return false
+	end
+	
+	local cols_str = table.concat(cols, ",")
+	local vals_str = table.concat(vals, ",")
+	
+	-- 如果没有需要更新的字段（只有主键），则只执行 INSERT，忽略重复键错误
+	local sql
+	if #updates == 0 then
+		-- 只有主键字段，使用 INSERT IGNORE
+		sql = string.format(
+			"INSERT IGNORE INTO %s (%s) VALUES (%s)",
+			table_name, cols_str, vals_str
+		)
+	else
+		-- 有更新字段，使用 ON DUPLICATE KEY UPDATE
+		local updates_str = table.concat(updates, ",")
+		sql = string.format(
+			"INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s",
+			table_name, cols_str, vals_str, updates_str
+		)
+	end
+	
+	-- 执行SQL
+	local ok, result = skynet.call(".mysql", "lua", "execute", sql)
+	if not ok then
+		elog("saveDbData failed:", sql, result and cjson.encode(result) or "unknown error")
+		return false
+	end
+	
+	return true
 end
 
 

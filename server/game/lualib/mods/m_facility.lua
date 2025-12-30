@@ -16,6 +16,14 @@ local REQUEST = base.REQUEST
 local NM = "facility"
 
 local lf = base.LocalFunc(NM)
+local ld = base.LocalData(NM,{
+	db = {
+		rid = "int",
+		cityId = "int",
+		facilities = "json",
+	},
+	table_name = "tb_city_facility_1",
+})
 
 local facilities_config = {}
 
@@ -28,7 +36,8 @@ function lf.load(self)
 
 
 	self.facility = {}
-	local ok,facility = skynet.call(".mysql", "lua", "select_by_key", "tb_city_facility_1", "rid", self.rid)
+	local facility,ok = PUBLIC.loadDbData(ld.table_name, "rid", self.rid, ld.db)
+	assert(ok)
 	if ok and next(facility) then
 		for _,v in pairs(facility) do
 			self.facility[v.cityId] = cjson.decode(v.facilities)
@@ -47,7 +56,7 @@ function lf.load(self)
 			}
 		end
 		-- 插入到数据库
-		local ok,msg = skynet.call(".mysql", "lua", "insert", "tb_city_facility_1", {
+		local ok,msg = skynet.call(".mysql", "lua", "insert", ld.table_name, {
 			rid = self.rid,
 			cityId = self.main_cityId,
 			facilities = cjson.encode(init_facility),
@@ -56,6 +65,7 @@ function lf.load(self)
 		-- 初始化一下
 		self.facility[self.main_cityId] = init_facility
 	end
+	print("load facility",dump(self.facility))
 end
 function lf.loaded(self)
 
@@ -69,12 +79,27 @@ end
 
 function lf.new_city(self, city)
 	self.facility[city.cityId] = city.facilities
-	local ok,msg = skynet.call(".mysql", "lua", "insert", "tb_city_facility_1", {
-		rid = self.rid,
-		cityId = city.cityId,
-		facilities = cjson.encode(city.facilities),
-	})
-	assert(ok,msg)
+
+	-- 这里应该可以不用插入，因为lf.save会识别插入或者更新
+	-- local ok,msg = skynet.call(".mysql", "lua", "insert", "tb_city_facility_1", {
+	-- 	rid = self.rid,
+	-- 	cityId = city.cityId,
+	-- 	facilities = cjson.encode(city.facilities),
+	-- })
+	-- assert(ok,msg)
+end
+function lf.save(self,m_name)
+	if m_name  == NM then
+		for cityId, facilities in pairs(self.facility) do
+			if facilities then
+				PUBLIC.saveDbData(ld.table_name, "cityId", cityId, {
+					rid = self.rid,
+						cityId = cityId,
+						facilities = facilities,
+					}, ld.db)
+			end
+		end
+	end
 end
 skynet.init(function () 
 	event:register("load",lf.load)
@@ -82,6 +107,7 @@ skynet.init(function ()
 	event:register("enter",lf.enter)
 	event:register("leave",lf.leave)
 	event:register("new_city",lf.new_city)
+	event:register("save", lf.save)
 end)
 
 -- 更新设施时间
@@ -97,30 +123,10 @@ function PUBLIC.updateFacilityTime(self)
 		end
 	end
 	if dirty then
-		PUBLIC.saveFacility(self)
+		lf.save(self, NM)
 	end
 end
 
--- 保存设施
-function PUBLIC.saveFacility(self)
-	if not self.facility or not next(self.facility) then
-		return true
-	end
-	
-	for cityId, facilities in pairs(self.facility) do
-		local facilities_json = cjson.encode(facilities)
-		-- 更新已存在的记录
-		local update_ok = skynet.call(".mysql", "lua", "update", "tb_city_facility_1", "cityId", cityId, {
-			facilities = facilities_json,
-		})
-		if not update_ok then
-			elog("保存设施失败，更新城市设施失败 cityId:%d, rid:%d", cityId, self.rid)
-			return false
-		end
-	end
-	
-	return true
-end
 
 -- 城市设施列表
 REQUEST[protoid.city_facilities] = function(self,args)
@@ -184,7 +190,7 @@ REQUEST[protoid.city_upFacility] = function(self,args)
 	-- 资源需求
 	local need = facility_config.levels[next_level].need
 	for k,v in pairs(need) do
-		if self.role_res[k] < v then
+		if self.resource[k] < v then
 			return CMD.send2client({
 				seq = args.seq,
 				name = protoid.city_upFacility,
@@ -194,22 +200,22 @@ REQUEST[protoid.city_upFacility] = function(self,args)
 	end
 	-- 扣除资源  这里要注意，应该同步扣除，如果失败，需要回滚
 	for k,v in pairs(need) do
-		self.role_res[k] = self.role_res[k] - v
-		assert(self.role_res[k] >= 0)
+		self.resource[k] = self.resource[k] - v
+		assert(self.resource[k] >= 0)
 	end
-	PUBLIC.saveRoleRes(self)
+	PUBLIC.updateRoleRes(self)
 
 	 -- 这里不加等级，等时间到了再加 PUBLIC.updateFacilityTime(self)
 	-- facility.level = facility.level + 1 
 	print("升级设施", cityId, fType, next_level, facility.up_time,facility_config.levels[next_level].time)
 	facility.up_time = os.time() + facility_config.levels[next_level].time
-	PUBLIC.saveFacility(self)
+	lf.save(self, NM)
 	CMD.send2client({
 		seq = args.seq,
 		msg = {
 			cityId = cityId,
 			facility = facility,
-			role_res = self.role_res,
+			role_res = self.resource,
 		},
 		name = protoid.city_upFacility,
 		code = error_code.success,
@@ -274,7 +280,7 @@ REQUEST[protoid.interior_transform] = function(self,args)
 	-- 计算转换比例
 	local convert_rate = add_rate / 100
 	
-	local source_res = self.role_res[Market_Type_Server[source.type]]
+	local source_res = self.resource[Market_Type_Server[source.type]]
 	print("转换比例", convert_rate,source.type,Market_Type_Server[source.type],source_res, source.value)
 	if source_res < source.value then
 		return CMD.send2client({
@@ -283,10 +289,12 @@ REQUEST[protoid.interior_transform] = function(self,args)
 			code = error_code.ResNotEnough,
 		})
 	end
-	local target_res = self.role_res[Market_Type_Server[target.type]]
-	self.role_res[Market_Type_Server[source.type]] = source_res - source.value
-	self.role_res[Market_Type_Server[target.type]] = target_res + math.ceil((source.value * convert_rate)/100)-- 向上取整
-	PUBLIC.saveRoleRes(self)
+	local target_res = self.resource[Market_Type_Server[target.type]]
+	PUBLIC.modifyRoleRes(self, {
+		[Market_Type_Server[source.type]] = -source.value,
+		[Market_Type_Server[target.type]] = math.ceil((source.value * convert_rate)/100),
+	})
+	
 	PUBLIC.pushRoleRes(self)
 	CMD.send2client({
 		seq = args.seq,
