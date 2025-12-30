@@ -70,7 +70,7 @@ function lf.enter(args,gate_link)
 	assert(ROLE.STATE == role_state.loaded or ROLE.STATE == role_state.online)
 
 	local fd = gate_link.fd
-	assert(fd ~= ROLE.fd)
+	-- assert(fd ~= ROLE.fd) -- 重登有可能不一样，所以这里不判断
 	reference_server.ref()
 	if ROLE.fd then
 		CMD.kick("reenter")

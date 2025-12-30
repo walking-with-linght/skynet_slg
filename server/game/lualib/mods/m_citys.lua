@@ -88,6 +88,15 @@ skynet.init(function ()
 	event:register("save", lf.save)
 end)
 
+-- 获取城市
+function PUBLIC.getCityById(self, cityId)
+	for _, city in ipairs(self.citys) do
+		if city.cityId == cityId then
+			return city
+		end
+	end
+end
+
 -- 战报
 REQUEST[protoid.nationMap_scanBlock] = function(self,args)
 
@@ -104,12 +113,13 @@ end
 -- 上报自己位置
 REQUEST[protoid.role_upPosition] = function(self,args)
 
-	-- CMD.send2client({
-	-- 	seq = args.seq,
-	-- 	msg = {
-	-- 		list = {},
-	-- 	},
-	-- 	name = protoid.nationMap_scanBlock,
-	-- 	code = error_code.success,
-	-- })
+	CMD.send2client({
+		seq = args.seq,
+		msg = {
+			x = args.msg.x,
+			y = args.msg.y,
+		},
+		name = protoid.role_upPosition,
+		code = error_code.success,
+	})
 end

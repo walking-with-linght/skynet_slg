@@ -45,6 +45,7 @@ function lf.load(self)
         }
         local ok = skynet.call(".mysql", "lua", "insert", ld.table_name, attr)
         assert(ok)
+		attr.pos_tags = {}
 		self.attr = attr
     else
 		self.attr = attr[1]
@@ -77,4 +78,56 @@ function PUBLIC.updateRoleAttr(self, attr_map)
 		self.attr[k] = v
 	end
 	lf.save(self, NM)
+end
+
+
+-- 坐标收藏
+REQUEST[protoid.role_posTagList] = function(self,args)
+	CMD.send2client({
+		seq = args.seq,
+		msg = {
+			pos_tags  = self.attr.pos_tags
+		},
+		name = protoid.role_posTagList,
+		code = error_code.success,
+	})
+end
+-- 标记坐标
+REQUEST[protoid.role_opPosTag] = function(self,args)
+	local pos_tags = self.attr.pos_tags
+	-- args.msg.type 1=标记，0=取消标记
+	if args.msg.type == 1 then -- 标记
+		local is_exist = false
+		print("pos_tags",dump(pos_tags),dump(args.msg))
+		for i,v in ipairs(pos_tags) do
+			if v.x == args.msg.x and v.y == args.msg.y then
+				return CMD.send2client({
+					seq = args.seq,
+					name = protoid.role_opPosTag,
+					code = error_code.InvalidParam,
+				})
+			end
+		end
+		table.insert(pos_tags, args.msg)
+	else -- 取消标记
+		for i,v in ipairs(pos_tags) do
+			if v.x == args.msg.x and v.y == args.msg.y then
+				table.remove(pos_tags, i)
+				break
+			end
+		end
+	end
+	self.attr.pos_tags = pos_tags
+	lf.save(self, NM)
+	CMD.send2client({
+		seq = args.seq,
+		msg = {
+			type = args.msg.type,
+			x = args.msg.x,
+			y = args.msg.y,
+			name = args.msg.name,
+		},
+		name = protoid.role_opPosTag,
+		code = error_code.success,
+	})
 end

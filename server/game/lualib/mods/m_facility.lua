@@ -40,7 +40,7 @@ function lf.load(self)
 	assert(ok)
 	if ok and next(facility) then
 		for _,v in pairs(facility) do
-			self.facility[v.cityId] = cjson.decode(v.facilities)
+			self.facility[v.cityId] = v.facilities
 		end
 		PUBLIC.updateFacilityTime(self)
 	else
@@ -65,13 +65,13 @@ function lf.load(self)
 		-- 初始化一下
 		self.facility[self.main_cityId] = init_facility
 	end
-	print("load facility",dump(self.facility))
+	-- print("load facility",dump(self.facility))
 end
 function lf.loaded(self)
 
 end
 function lf.enter(self, seq)
-
+	PUBLIC.updateFacilityAdd(self)
 end
 function lf.leave(self)
 
@@ -99,6 +99,7 @@ function lf.save(self,m_name)
 					}, ld.db)
 			end
 		end
+		PUBLIC.updateFacilityAdd(self)
 	end
 end
 skynet.init(function () 
@@ -109,6 +110,12 @@ skynet.init(function ()
 	event:register("new_city",lf.new_city)
 	event:register("save", lf.save)
 end)
+
+-- 获取某设施
+function PUBLIC.getFacility(self, cityId, fType)
+	local facility = self.facility[cityId][fType]
+	return facility
+end
 
 -- 更新设施时间
 function PUBLIC.updateFacilityTime(self)
@@ -127,6 +134,32 @@ function PUBLIC.updateFacilityTime(self)
 	end
 end
 
+-- 更新城市设施的所有加成  
+function PUBLIC.updateFacilityAdd(self)
+	local additions = {}
+	for cityId, facilities in pairs(self.facility) do
+		additions[cityId] = {}
+		for _,v in pairs(facilities) do
+			local facility_config = facilities_config[v.type]
+			if facility_config then
+				for idx,addition_type in ipairs(facility_config.additions) do
+					if v.level > 0 then
+						additions[cityId][addition_type] = (additions[cityId][addition_type] or 0) + facility_config.levels[v.level].values[idx]
+					end
+				end
+			end
+		end
+	end
+	self.additions = additions
+end
+
+function PUBLIC.getFacilityAdd(self, cityId, addition_type)
+	local additions = self.additions[cityId]
+	if not additions then
+		return 0
+	end
+	return additions[addition_type] or 0
+end
 
 -- 城市设施列表
 REQUEST[protoid.city_facilities] = function(self,args)

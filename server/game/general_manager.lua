@@ -139,156 +139,8 @@ local function newGeneral(cfgId, rid, level)
     return general, true
 end
 
--- 批量更新并保存武将
-function CMD.batchUpdateGeneral(generals)
-    if not generals or type(generals) ~= "table" or #generals == 0 then
-        return false, "invalid generals"
-    end
-    
-    local successCount = 0
-    local failCount = 0
-    
-    for _, generalData in ipairs(generals) do
-        if not generalData or not generalData.id then
-            failCount = failCount + 1
-            skynet.error("batchUpdateGeneral: invalid general data, missing id")
-            goto continue
-        end
-        
-        local gid = tonumber(generalData.id)
-        if not gid then
-            failCount = failCount + 1
-            skynet.error("batchUpdateGeneral: invalid general id:", generalData.id)
-            goto continue
-        end
-        
-        -- 从内存中查找武将
-        local general = genByGId[gid]
-        if not general then
-            failCount = failCount + 1
-            skynet.error("batchUpdateGeneral: general not found in memory, gid:", gid)
-            goto continue
-        end
-        
-        -- 构建更新数据（排除id字段）
-        local updateData = {}
-        local hasUpdate = false
-        
-        for key, value in pairs(generalData) do
-            if key ~= "id" then
-                -- 处理skills字段：如果是table，需要序列化为JSON
-                if key == "skills" and type(value) == "table" then
-                    updateData[key] = cjson.encode(value)
-                    general[key] = value  -- 内存中保持为table
-                else
-                    updateData[key] = value
-                    general[key] = value  -- 更新内存中的字段
-                end
-                hasUpdate = true
-            end
-        end
-        
-        -- 如果有需要更新的字段，同步到数据库
-        if hasUpdate then
-            local ok = skynet.call(".mysql", "lua", "update", "tb_general_1", 
-                "id", gid, updateData)
-            
-            if ok then
-                successCount = successCount + 1
-            else
-                failCount = failCount + 1
-                skynet.error("batchUpdateGeneral: update mysql failed, gid:", gid)
-                -- 如果数据库更新失败，可以考虑回滚内存更新，但这里为了简单不处理
-            end
-        else
-            -- 没有需要更新的字段，也算成功
-            successCount = successCount + 1
-        end
-        
-        ::continue::
-    end
-    
-    if failCount > 0 then
-        return false, string.format("success: %d, failed: %d", successCount, failCount)
-    end
-    
-    return true, string.format("success: %d", successCount)
-end
-
--- 批量更新体力（使用CASE WHEN语句，每100条合并成一条SQL）
-local function batchUpdatePhysicalPower(updates)
-    if not updates or #updates == 0 then
-        return
-    end
-    
-    local batchSize = 100
-    local batches = math.ceil(#updates / batchSize)
-    
-    for batch = 1, batches do
-        local startIdx = (batch - 1) * batchSize + 1
-        local endIdx = math.min(batch * batchSize, #updates)
-        local batchUpdates = {}
-        
-        for i = startIdx, endIdx do
-            table.insert(batchUpdates, updates[i])
-        end
-        
-        if #batchUpdates > 0 then
-            -- 构建批量更新SQL：UPDATE table SET field = CASE id WHEN ... THEN ... END WHERE id IN (...)
-            local caseWhenParts = {}
-            local ids = {}
-            
-            for _, update in ipairs(batchUpdates) do
-                table.insert(caseWhenParts, string.format("WHEN %d THEN %d", update.gid, update.newPower))
-                table.insert(ids, tostring(update.gid))
-            end
-            
-            local caseWhen = table.concat(caseWhenParts, " ")
-            local idList = table.concat(ids, ",")
-            local sql = string.format(
-                "UPDATE tb_general_1 SET physical_power = CASE id %s END WHERE id IN (%s);",
-                caseWhen, idList
-            )
-            
-            -- 执行批量更新
-            local ok = skynet.call(".mysql", "lua", "execute", sql)
-            if not ok then
-                skynet.error("batch update physical_power failed")
-            end
-        end
-    end
-end
-
--- 更新体力（每小时执行一次）
-local function updatePhysicalPower()
-    local basicConfig = getBasicConfig()
-    local limit = basicConfig.general.physical_power_limit or 100
-    local recoverCnt = basicConfig.general.recovery_physical_power or 10
-    
-    while true do
-        skynet.sleep(360000)  -- 1小时 = 3600秒 = 360000 * 0.01秒
-        
-        -- 收集需要更新的武将
-        local updates = {}
-        for gid, general in pairs(genByGId) do
-            if general.physical_power < limit then
-                local newPower = math.min(limit, general.physical_power + recoverCnt)
-                if newPower ~= general.physical_power then
-                    general.physical_power = newPower
-                    table.insert(updates, {
-                        gid = gid,
-                        newPower = newPower
-                    })
-                end
-            end
-        end
-        
-        -- 批量更新到数据库（每100条合并成一条SQL）
-        if #updates > 0 then
-            batchUpdatePhysicalPower(updates)
-        end
-    end
-end
+-- 批量更新接口已迁移到 m_generals.lua
+-- 体力更新逻辑已迁移到 m_generals.lua，由玩家模块自行管理
 
 -- 创建NPC武将
 local function createNPC()
@@ -322,38 +174,15 @@ local function createNPC()
     return gs, true
 end
 
--- 加载所有武将
+-- 初始化服务（不再加载所有武将）
 function CMD.load()
-    -- 从数据库加载所有正常状态的武将
-    -- 注意：select_by_conditions 返回 (ok, result)，如果查询成功但无结果，result 可能为 nil
+    -- 只创建NPC武将（如果还没有）
     local ok, generals = skynet.call(".mysql", "lua", "select_by_conditions", 
         "tb_general_1", 
-        {state = GeneralState.Normal})
+        {rid = 0, state = GeneralState.Normal})
     
-    if not ok then
-        skynet.error("load generals from db failed")
-        return
-    end
-    
-    -- 处理 generals 可能为 nil 的情况
-    if not generals then
-        generals = {}
-    end
-    
-    -- 清空缓存
-    genByRole = {}
-    genByGId = {}
-    
-    -- 加载到内存
-    if generals then
-        for _, g in ipairs(generals) do
-            g.skills = cjson.decode(g.skills)
-            addGeneral(g)
-        end
-    end
-    
-    -- 如果没有武将，创建NPC
-    if not generals or #generals == 0 then
+    if not ok or not generals or #generals == 0 then
+        -- 创建NPC武将
         local gs, ok = createNPC()
         if ok and gs then
             for _, g in ipairs(gs) do
@@ -362,179 +191,10 @@ function CMD.load()
         end
     end
     
-    -- 启动体力更新协程
-    skynet.fork(updatePhysicalPower)
     print("general_manager load success")
 end
 
--- 根据角色ID获取武将列表
-function CMD.getByRId(rid)
-    rid = tonumber(rid) or 0
-    
-    -- 先从内存查找
-    if genByRole[rid] then
-        local out = {}
-        for _, g in ipairs(genByRole[rid]) do
-            if isGeneralActive(g) then
-                table.insert(out, g)
-            end
-        end
-        if #out > 0 then
-            return out, true
-        end
-    end
-    
-    -- 从数据库查找
-    local ok, generals = skynet.call(".mysql", "lua", "select_by_conditions", 
-        "tb_general_1", 
-        {rid = rid, state = GeneralState.Normal})
-    
-    if ok and generals and #generals > 0 then
-        -- 添加到内存
-        for _, g in ipairs(generals) do
-            addGeneral(g)
-        end
-        return generals, true
-    else
-        -- elog("general not found, rid:", rid)
-        return nil, false
-    end
-end
-
--- 根据武将ID获取武将
-function CMD.getByGId(gid)
-    gid = tonumber(gid) or 0
-    
-    -- 先从内存查找
-    if genByGId[gid] then
-        local g = genByGId[gid]
-        if isGeneralActive(g) then
-            return g, true
-        else
-            return nil, false
-        end
-    end
-    
-    -- 从数据库查找
-    local ok, general = skynet.call(".mysql", "lua", "select_one_by_conditions", 
-        "tb_general_1", 
-        {id = gid, state = GeneralState.Normal})
-    
-    if ok and general then
-        addGeneral(general)
-        return general, true
-    else
-        elog("general gid not found, gid:", gid)
-        return nil, false
-    end
-end
-
--- 检查角色是否有某个武将
-function CMD.hasGeneral(rid, gid)
-    rid = tonumber(rid) or 0
-    gid = tonumber(gid) or 0
-    
-    local generals, ok = CMD.getByRId(rid)
-    if ok and generals then
-        for _, g in ipairs(generals) do
-            if g.id == gid then
-                return g, true
-            end
-        end
-    end
-    return nil, false
-end
-
--- 检查角色是否有多个武将
-function CMD.hasGenerals(rid, gIds)
-    rid = tonumber(rid) or 0
-    if not gIds or type(gIds) ~= "table" then
-        return {}, false
-    end
-    
-    local gs = {}
-    for _, gid in ipairs(gIds) do
-        local g, ok = CMD.hasGeneral(rid, gid)
-        if not ok then
-            return gs, false
-        end
-        table.insert(gs, g)
-    end
-    return gs, true
-end
-
--- 获取角色的武将数量
-function CMD.count(rid)
-    rid = tonumber(rid) or 0
-    local generals, ok = CMD.getByRId(rid)
-    if ok then
-        return #generals
-    else
-        return 0
-    end
-end
-
--- 创建新武将
-function CMD.newGeneral(cfgId, rid, level)
-    cfgId = tonumber(cfgId) or -99
-    rid = tonumber(rid) or -99
-    level = tonumber(level) or 1
-    
-    local g, ok = newGeneral(cfgId, rid, level)
-    if ok then
-        addGeneral(g)
-    end
-    return g, ok
-end
-
--- 获取或创建武将（如果不存在则创建）
-function CMD.getOrCreateByRId(rid)
-    rid = tonumber(rid) or 0
-    
-    local generals, ok = CMD.getByRId(rid)
-    if ok then
-        return generals, true
-    else
-        -- 创建3个随机武将
-        local gs, ok = CMD.randCreateGeneral(rid, 3)
-        if not ok then
-            return nil, false
-        end
-        return gs, true
-    end
-end
-
--- 随机创建武将
-function CMD.randCreateGeneral(rid, nums)
-    rid = tonumber(rid) or 0
-    nums = tonumber(nums) or 1
-    
-    local generalConfig = getGeneralConfig()
-    if not generalConfig or not generalConfig.list then
-        return nil, false
-    end
-    
-    local gs = {}
-    
-    for i = 1, nums do
-        -- 随机抽取一个武将配置（Draw方法）
-        local cfgList = generalConfig.list
-        if not cfgList or #cfgList == 0 then
-            return nil, false
-        end
-        
-        local randomIndex = math.random(1, #cfgList)
-        local cfgId = cfgList[randomIndex].cfgId
-        
-        local g, ok = CMD.newGeneral(cfgId, rid, 1)
-        if not ok then
-            return nil, false
-        end
-        table.insert(gs, g)
-    end
-    
-    return gs, true
-end
+-- 以下接口已迁移到 m_generals.lua，这里只保留 NPC 相关功能
 
 -- 获取NPC武将
 function CMD.getNPCGenerals(cfgIds, levels)
@@ -542,18 +202,16 @@ function CMD.getNPCGenerals(cfgIds, levels)
         return nil, false
     end
     
-    local generals, ok = CMD.getByRId(0)  -- NPC的rid为0
-    if not ok then
-        return nil, false
-    end
+    -- 从内存缓存中获取NPC武将（rid=0）
+    local npcGenerals = genByRole[0] or {}
     
     local target = {}
     for i = 1, #cfgIds do
         local cfgId = cfgIds[i]
         local level = levels[i]
         
-        for _, g in ipairs(generals) do
-            if g.level == level and g.cfg_id == cfgId then
+        for _, g in ipairs(npcGenerals) do
+            if g.level == level and g.cfgId == cfgId and isGeneralActive(g) then
                 table.insert(target, g)
                 break
             end

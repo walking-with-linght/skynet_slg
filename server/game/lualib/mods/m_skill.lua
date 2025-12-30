@@ -49,7 +49,6 @@ function lf.load(self)
 	if ok and next(skills) then
 		-- print("load skills from mysql",dump(skills))
 		for _, skill in pairs(skills) do
-			skill.belong_generals = cjson.decode(skill.belong_generals)
 			self.skills[skill.cfgId] = skill
 		end
 	else

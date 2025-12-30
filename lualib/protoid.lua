@@ -4,6 +4,8 @@ return {
     handshake =  "handshake",
     -- 心跳
     heartbeat =  "heartbeat",
+    -- 重登
+    account_relogin = "account.relogin",
     -- 登录
     account_login = "account.login",
     -- 进入游戏
@@ -62,4 +64,6 @@ return {
     chat_exit = "chat.exit",
     -- 标记坐标
     role_opPosTag = "role.opPosTag",
+    -- 部队重组
+    army_dispose = "army.dispose",
 }

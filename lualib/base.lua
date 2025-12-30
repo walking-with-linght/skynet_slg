@@ -75,28 +75,37 @@ function PUBLIC.loadDbData(table_name, key_field, key_value, db_schema)
 		return nil, false
 	end
 	
-	-- 根据字段类型自动处理
-	for field_name, field_type in pairs(db_schema) do
-		if data[field_name] ~= nil then
-			if field_type == "json" then
-				-- JSON字段自动解码
-				if type(data[field_name]) == "string" and data[field_name] ~= "" then
-					local decode_ok, decoded = pcall(cjson.decode, data[field_name])
-					if decode_ok then
-						data[field_name] = decoded
-					else
-						elog("loadDbData: json decode failed", field_name, data[field_name])
-						data[field_name] = {}
+	-- data 是多行数据（数组），需要遍历每一行进行处理
+	if type(data) ~= "table" then
+		elog("loadDbData: data is not a table")
+		return nil, false
+	end
+	
+	-- 处理每一行数据
+	for _, row in ipairs(data) do
+		-- 对每一行的字段进行类型处理
+		for field_name, field_type in pairs(db_schema) do
+			if row[field_name] ~= nil then
+				if field_type == "json" then
+					-- JSON字段自动解码
+					if type(row[field_name]) == "string" and row[field_name] ~= "" then
+						local decode_ok, decoded = pcall(cjson.decode, row[field_name])
+						if decode_ok then
+							row[field_name] = decoded
+						else
+							elog("loadDbData: json decode failed", field_name, row[field_name])
+							row[field_name] = {}
+						end
+					elseif row[field_name] == "" or row[field_name] == nil then
+						row[field_name] = {}
 					end
-				elseif data[field_name] == "" or data[field_name] == nil then
-					data[field_name] = {}
+				elseif field_type == "int" then
+					-- 确保是整数类型
+					row[field_name] = tonumber(row[field_name]) or 0
+				elseif field_type == "float" then
+					-- 确保是浮点数类型
+					row[field_name] = tonumber(row[field_name]) or 0.0
 				end
-			elseif field_type == "int" then
-				-- 确保是整数类型
-				data[field_name] = tonumber(data[field_name]) or 0
-			elseif field_type == "float" then
-				-- 确保是浮点数类型
-				data[field_name] = tonumber(data[field_name]) or 0.0
 			end
 		end
 	end
@@ -243,7 +252,7 @@ function PUBLIC.saveDbData(table_name, key_field, key_value, data, db_schema)
 			table_name, cols_str, vals_str, updates_str
 		)
 	end
-	
+	print("saveDbData", sql)
 	-- 执行SQL
 	local ok, result = skynet.call(".mysql", "lua", "execute", sql)
 	if not ok then
