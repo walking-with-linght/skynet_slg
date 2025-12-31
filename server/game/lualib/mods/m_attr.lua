@@ -28,7 +28,7 @@ local ld = base.LocalData(NM,{
 		parent_id = "int",
 		collect_times = "int",
 		pos_tags = "json",
-		last_collect_time = "string",
+		last_collect_time = "timestamp",
 	},
 	table_name = "tb_role_attribute_1",
 })

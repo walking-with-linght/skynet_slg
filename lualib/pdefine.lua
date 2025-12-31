@@ -87,3 +87,8 @@ Army_Cmd = {
 	ArmyCmdConscript   = 5, --征兵
 	ArmyCmdTransfer    = 6, --调动
 }
+
+Game_Map_Size = {
+    Width = 100,
+    Height = 100,
+}

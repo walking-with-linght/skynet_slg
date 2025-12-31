@@ -105,6 +105,15 @@ function PUBLIC.loadDbData(table_name, key_field, key_value, db_schema)
 				elseif field_type == "float" then
 					-- 确保是浮点数类型
 					row[field_name] = tonumber(row[field_name]) or 0.0
+				elseif field_type == "timestamp" or field_type == "datetime" then
+					-- timestamp 和 datetime 类型，保持为字符串格式
+					-- 如果需要，可以转换为 Unix 时间戳
+					if row[field_name] == nil or row[field_name] == "" then
+						row[field_name] = nil
+					else
+						-- 保持 MySQL 返回的字符串格式，如 'YYYY-MM-DD HH:MM:SS'
+						row[field_name] = tostring(row[field_name])
+					end
 				end
 			end
 		end
@@ -198,8 +207,38 @@ function PUBLIC.saveDbData(table_name, key_field, key_value, data, db_schema)
 				processed_value = tonumber(value) or 0
 			end
 			is_string = false
+		elseif field_type == "timestamp" or field_type == "datetime" then
+			-- timestamp 和 datetime 类型
+			if value == nil or value == "" then
+				processed_value = "NULL"
+				is_string = false  -- NULL 不需要引号
+			elseif type(value) == "number" then
+				-- 数字（Unix 时间戳），转换为 MySQL 格式
+				processed_value = os.date("%Y-%m-%d %H:%M:%S", value)
+				is_string = true
+			elseif type(value) == "string" then
+				-- 字符串，假设已经是 MySQL 格式或需要转换
+				if value == "NULL" or value == "CURRENT_TIMESTAMP" then
+					processed_value = value
+					is_string = false  -- 这些关键字不需要引号
+				else
+					-- 尝试解析为时间戳
+					local timestamp = tonumber(value)
+					if timestamp then
+						processed_value = os.date("%Y-%m-%d %H:%M:%S", timestamp)
+					else
+						-- 假设已经是 MySQL 格式的字符串
+						processed_value = value
+					end
+					is_string = true
+				end
+			else
+				-- 其他类型，转换为字符串
+				processed_value = tostring(value)
+				is_string = true
+			end
 		else
-			-- string 和 datetime 类型
+			-- string 类型
 			if value == nil then
 				processed_value = ""
 			else
@@ -208,9 +247,12 @@ function PUBLIC.saveDbData(table_name, key_field, key_value, data, db_schema)
 			is_string = true
 		end
 		
-		-- 字符串类型需要转义，数值类型直接使用
+		-- 字符串类型需要转义，数值类型和 NULL 直接使用
 		local sql_value
-		if is_string then
+		if processed_value == "NULL" or processed_value == "CURRENT_TIMESTAMP" then
+			-- NULL 和 CURRENT_TIMESTAMP 不需要引号
+			sql_value = processed_value
+		elseif is_string then
 			sql_value = mysql.quote_sql_str(processed_value)
 		else
 			sql_value = tostring(processed_value)

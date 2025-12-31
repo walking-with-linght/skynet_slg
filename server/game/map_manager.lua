@@ -66,6 +66,16 @@ local function isCanBuildByMapConfig(x, y)
     return true
 end
 
+-- 根据坐标提供对应建筑配置
+function CMD.getBuildConfigByPosition(x, y)
+    local mapData = getMapData()
+    if not mapData or not mapData.list then
+        return nil
+    end
+    local mapWidth = mapData.w or mapData.width
+    local posIndex = toPositionIndex(x, y, mapWidth)
+    return mapData.list[posIndex + 1]
+end
 
 -- 检查位置是否可以建城（参考 Go 代码 IsCanBuildCity 逻辑）
 local function isCanBuildCity(x, y, mapWidth, mapHeight)

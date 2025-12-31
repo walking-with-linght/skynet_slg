@@ -106,6 +106,28 @@ function PUBLIC.modifyRoleRes(self, res_map)
 end
 
 
+-- 批量扣除资源，比如全部满足才扣除
+function PUBLIC.batchDeductRoleRes(self, res_map)
+	local all_enough = true
+	for k,v in pairs(res_map or {}) do
+		if self.resource[k] < v then
+			all_enough = false
+			break
+		end
+	end
+	if all_enough then
+		for k,v in pairs(res_map or {}) do
+			self.resource[k] = self.resource[k] - v
+		end
+		lf.save(self, NM)
+		return true
+	else
+		return false
+	end
+	return false
+end
+
+
 -- 征收资源进度
 REQUEST[protoid.interior_openCollect] = function(self,args)
 	local role_res_config = sharedata.query("config/basic.lua")

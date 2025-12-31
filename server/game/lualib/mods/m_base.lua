@@ -141,7 +141,7 @@ REQUEST[protoid.nrole_myProperty] = function(self,args)
 	}
 	table.merge(pack_role_res, self.resource)
 	local pack = {
-		armys = self.armys,
+		armys = PUBLIC.pack_army_list(self),
 		citys = self.citys,
 		generals = self.generals,
 		mr_builds = {}, -- 应该是正在建造的建筑

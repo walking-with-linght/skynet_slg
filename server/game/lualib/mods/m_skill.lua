@@ -24,7 +24,7 @@ local ld = base.LocalData(NM,{
 		rid = "int",
 		cfgId = "int",
 		belong_generals = "json",
-		ctime = "string",
+		ctime = "timestamp",
 	},
 	table_name = "tb_skill_1",
 })

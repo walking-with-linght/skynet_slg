@@ -42,7 +42,7 @@ local ld = base.LocalData(NM, {
 		compose_type = "int",
 		skills = "json",
 		state = "int",
-		created_at = "string",
+		created_at = "timestamp",
 	},
 	table_name = "tb_general_1",
 	id_map_cache = {},
@@ -62,6 +62,11 @@ function lf.load(self)
 	for _, general in ipairs(generals_data) do
 		-- skills 字段已经在 loadDbData 中自动解码为 table
 		if general.state == GeneralState.Normal then
+			-- 客户端要的字段，跟服务器字段不一致，烦死了
+			general.curArms = general.arms
+			general.hasPrPoint = general.has_pr_point
+			general.usePrPoint = general.use_pr_point
+
 			table.insert(self.generals, general)
 			ld.id_map_cache[general.id] = general
 		end
@@ -284,12 +289,16 @@ function PUBLIC.pushGeneral(self, gid)
 	})
 end
 
+function lf.army_dispose(self, generalId)
+	PUBLIC.pushGeneral(self, generalId)
+end
 skynet.init(function () 
 	event:register("load",lf.load)
 	event:register("loaded",lf.loaded)
 	event:register("enter",lf.enter)
 	event:register("leave",lf.leave)
 	event:register("save", lf.save)
+	event:register("army_dispose", lf.army_dispose)
 end)
 
 -- 武将信息

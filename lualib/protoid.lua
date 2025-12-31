@@ -66,4 +66,12 @@ return {
     role_opPosTag = "role.opPosTag",
     -- 部队重组
     army_dispose = "army.dispose",
+    -- 推送部队
+    army_push = "army.push",
+    -- 分配士兵
+    army_conscript = "army.conscript",
+    -- 查看单个部队数据
+    army_myOne = "army.myOne",
+    -- 派遣部队
+    army_assign = "army.assign",
 }
