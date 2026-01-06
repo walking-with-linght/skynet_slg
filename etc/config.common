@@ -6,7 +6,7 @@ logpath = "./"
 bootstrap = "snlua bootstrap" -- The service for bootstrap
 
 harbor = 0
-enablessl=false
+enablessl = true
 
 discover_key = "skynet_slg_discover"
 

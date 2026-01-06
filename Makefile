@@ -19,11 +19,10 @@ $(LUA_STATICLIB) :
 
 # https : turn on TLS_MODULE to add https support
 
-# 自动检测平台
-UNAME_S := $(shell uname -s)
+TLS_MODULE=ltls
 
-# TLS 配置
-TLS_MODULE = ltls
+# 自动检测平台并设置 OpenSSL 路径
+UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Darwin)
     # macOS - 使用 Homebrew 的 OpenSSL
@@ -32,24 +31,31 @@ ifeq ($(UNAME_S),Darwin)
         TLS_LIB = $(OPENSSL_PREFIX)/lib
         TLS_INC = $(OPENSSL_PREFIX)/include
     else
-        $(warning OpenSSL not found via Homebrew, disabling TLS support)
-        TLS_MODULE =
-        TLS_LIB =
-        TLS_INC =
+        $(warning OpenSSL not found via Homebrew, trying system paths)
+        # 尝试系统路径（macOS 可能没有，但作为后备）
+        TLS_LIB = /usr/local/lib
+        TLS_INC = /usr/local/include
     endif
 else
-    # Linux - 使用系统 OpenSSL
-    TLS_LIB = /usr/lib
-    TLS_INC = /usr/include
-endif
-
-# 检查 OpenSSL 头文件是否存在
-ifneq ($(TLS_MODULE),)
-    ifeq ($(wildcard $(TLS_INC)/openssl/evp.h),)
-        $(warning OpenSSL headers not found at $(TLS_INC)/openssl/, disabling TLS support)
-        TLS_MODULE =
-        TLS_LIB =
-        TLS_INC =
+    # Linux 和其他 Unix 系统
+    # 优先尝试 pkg-config，然后尝试常见路径
+    OPENSSL_PREFIX := $(shell pkg-config --variable=prefix openssl 2>/dev/null)
+    ifneq ($(OPENSSL_PREFIX),)
+        TLS_LIB = $(OPENSSL_PREFIX)/lib
+        TLS_INC = $(OPENSSL_PREFIX)/include
+    else
+        # 尝试常见的 Ubuntu/Debian 路径
+        ifneq ($(wildcard /usr/lib/x86_64-linux-gnu/libssl.so),)
+            TLS_LIB = /usr/lib/x86_64-linux-gnu
+            TLS_INC = /usr/include
+        else ifneq ($(wildcard /usr/lib/aarch64-linux-gnu/libssl.so),)
+            TLS_LIB = /usr/lib/aarch64-linux-gnu
+            TLS_INC = /usr/include
+        else
+            # 默认系统路径
+            TLS_LIB = /usr/lib
+            TLS_INC = /usr/include
+        endif
     endif
 endif
 
@@ -83,7 +89,7 @@ update3rd :
 CSERVICE = snlua logger gate harbor
 LUA_CLIB = skynet \
   client \
-  bson md5 sproto lpeg rand openssl cjson tz lcrypt pb consistenthash lfs $(TLS_MODULE)
+  bson md5 sproto lpeg $(TLS_MODULE)
 
 LUA_CLIB_SKYNET = \
   lua-skynet.c lua-seri.c \
@@ -142,52 +148,11 @@ $(LUA_CLIB_PATH)/client.so : lualib-src/lua-clientsocket.c lualib-src/lua-crypt.
 $(LUA_CLIB_PATH)/sproto.so : lualib-src/sproto/sproto.c lualib-src/sproto/lsproto.c | $(LUA_CLIB_PATH)
 	$(CC) $(CFLAGS) $(SHARED) -Ilualib-src/sproto $^ -o $@ 
 
-$(LUA_CLIB_PATH)/rand.so : 3rd/lua-rand/rand.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-rand $^ -o $@ 
-
-$(LUA_CLIB_PATH)/tz.so : 3rd/lua-tz/src/tz.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-tz/src $^ -o $@ 
-
-$(LUA_CLIB_PATH)/consistenthash.so : 3rd/lua-consistent-hash/consistenthash.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-consistent-hash/src $^ -o $@ 
-
-$(LUA_CLIB_PATH)/lfs.so : 3rd/lua-lfs/src/lfs.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-lfs/src $^ -o $@
-
-$(LUA_CLIB_PATH)/ddz.so : 3rd/ddz/AutoLock.cpp 3rd/ddz/LuaYunCheng.cpp 3rd/ddz/PermutationCombine.cpp 3rd/ddz/YunChengAI.cpp | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/ddz $^ -o $@ -lpthread
-
-$(LUA_CLIB_PATH)/cjson.so : 3rd/lua-cjson/lua_cjson.c 3rd/lua-cjson/strbuf.c 3rd/lua-cjson/fpconv.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-cjson $^ -o $@
-
 $(LUA_CLIB_PATH)/ltls.so : lualib-src/ltls.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -Iskynet-src -L$(TLS_LIB) -I$(TLS_INC) $^ -o $@ -lssl -lcrypto
+	$(CC) $(CFLAGS) $(SHARED) -Iskynet-src -I$(TLS_INC) -L$(TLS_LIB) $^ -o $@ -lssl -lcrypto
 
 $(LUA_CLIB_PATH)/lpeg.so : 3rd/lpeg/lpcap.c 3rd/lpeg/lpcode.c 3rd/lpeg/lpprint.c 3rd/lpeg/lptree.c 3rd/lpeg/lpvm.c 3rd/lpeg/lpcset.c | $(LUA_CLIB_PATH)
 	$(CC) $(CFLAGS) $(SHARED) -I3rd/lpeg $^ -o $@ 
-
-# 递归查找 3rd/lua-openssl 目录及其子目录下的所有 .c 文件和 .h 文件
-SSL_SRCS := $(shell find 3rd/lua-openssl -name '*.c')
-SSL_HDRS := $(shell find 3rd/lua-openssl -name '*.h')
-SSL_INCS := $(sort $(dir $(SSL_HDRS)))  # 获取所有子目录路径
-SSL_CFLAGS = $(CFLAGS)
-SSL_CFLAGS += $(foreach dir,$(SSL_INCS),-I$(dir))  # 添加递归搜索路径
-
-$(LUA_CLIB_PATH)/openssl.so : $(SSL_SRCS) | $(LUA_CLIB_PATH)
-	$(CC) $(SSL_CFLAGS) $(SHARED) $^ -o $@ -L$(TLS_LIB) -I$(TLS_INC) -lssl
-
-CRYPT_SRCS := $(shell find 3rd/lua-crypt/src -name '*.c')
-$(LUA_CLIB_PATH)/lcrypt.so :  $(CRYPT_SRCS) | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-crypt/src -L$(TLS_LIB) -I$(TLS_INC) $^ -o $@ -lssl -lcrypto
-
-$(LUA_CLIB_PATH)/pb.so : 3rd/lua-protobuf/pb.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-protobuf $^ -o $@
-
-$(LUA_CLIB_PATH)/navigation.so : 3rd/slg-navigation/luabinding.c 3rd/slg-navigation/map.c 3rd/slg-navigation/jps.c 3rd/slg-navigation/fibheap.c 3rd/slg-navigation/smooth.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/slg-navigation $^ -o $@
-
-$(LUA_CLIB_PATH)/hex_grid.so : 3rd/lua-hex-grid/luabinding.c 3rd/lua-hex-grid/hex_grid.c 3rd/lua-hex-grid/node_freelist.c 3rd/lua-hex-grid/intlist.c | $(LUA_CLIB_PATH)
-	$(CC) $(CFLAGS) $(SHARED) -I3rd/lua-hex-grid $^ -o $@
 
 clean :
 	rm -f $(SKYNET_BUILD_PATH)/skynet $(CSERVICE_PATH)/*.so $(LUA_CLIB_PATH)/*.so && \

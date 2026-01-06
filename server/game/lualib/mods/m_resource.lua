@@ -195,7 +195,7 @@ REQUEST[protoid.interior_collect] = function(self,args)
 	})
 	local next_time = os.time()*1000 + role_res_config.role.collect_interval
 	if cur_collect_times >= role_res_config.role.collect_times_limit then
-		next_time = (utils.getToday0Timestamp() + 24*3600 ) *1000 
+		next_time = (utils.getToday0Timestamp() + 24*3600 ) *1000  + role_res_config.role.collect_interval
 	end
 	CMD.send2client({
 		seq = args.seq,

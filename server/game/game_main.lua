@@ -3,7 +3,6 @@ require "skynet.manager"
 
 
 
-
 skynet.start(function()
     skynet.error('account start')
 

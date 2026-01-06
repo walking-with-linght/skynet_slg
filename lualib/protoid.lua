@@ -24,6 +24,8 @@ return {
     army_myList = "army.myList",
     -- 战报
     war_report = "war.report",
+    -- 查看战报
+    war_read = "war.read",
     -- 扫描区域
     nationMap_scanBlock = "nationMap.scanBlock",
     -- 技能列表
