@@ -110,6 +110,10 @@ function PUBLIC.pushRoleRes(self)
 end
 
 
+function CMD.query_role_info(self)
+	return self.role
+end
+
 -------client-------
 function REQUEST:heartbeat()
 	return {result = error_code.success}

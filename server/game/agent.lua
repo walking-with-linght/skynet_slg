@@ -175,4 +175,13 @@ function PUBLIC.on_close_service()
 	skynet.call("agent_manager", "lua", "agent_exit", ROLE.fd, ROLE.rid, skynet.self())
 end
 
-base.start_service()
+local function dispatch(session, source, cmd, subcmd, ...)
+	local f = assert(CMD[cmd])
+	if session == 0 then
+		f(ROLE,subcmd, ...)
+	else
+		skynet.ret(skynet.pack(f(ROLE,subcmd, ...)))
+	end
+end
+
+base.start_service(nil,nil)

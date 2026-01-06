@@ -184,3 +184,22 @@ function CMD.agent_exit(fd, rid, addr)
 		end
 	end
 end
+
+ld.role_info_cache = {}
+-- 查询玩家基本信息
+function CMD.query_role_info(rid)
+	if ld.role_info_cache[rid] then
+		return ld.role_info_cache[rid]
+	end
+	local ret = CMD.agent_call_loaded(rid, "lua", "query_role_info")
+	if ret then
+		ld.role_info_cache[rid] = ret
+		return ret
+	end
+	-- 从数据库查询
+	local ok, role = skynet.call(".mysql", "lua", "select_one_by_key", "tb_role_1", "rid", rid)
+	if ok and role then
+		ld.role_info_cache[rid] = role
+		return role
+	end
+end

@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS `tb_role_attribute_1` (
     `collect_times` tinyint unsigned NOT NULL DEFAULT '0' COMMENT '征收次数',
     `last_collect_time` timestamp DEFAULT '2013-03-15 14:38:09' COMMENT '最后征收时间',
     `pos_tags` varchar(512) COMMENT '收藏的位置',
+    `union_id` int unsigned NOT NULL COMMENT '联盟id',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_rid` (`rid`)  -- 新增唯一约束
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '玩家属性表';

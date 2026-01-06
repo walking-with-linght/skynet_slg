@@ -35,6 +35,7 @@ skynet.start(function()
     -- skynet.newservice("general_manager")
     skynet.newservice("map_manager")
     skynet.newservice("chat_manager")
+    skynet.newservice("union_manager")
 
 
 

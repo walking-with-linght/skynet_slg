@@ -76,4 +76,18 @@ return {
     army_myOne = "army.myOne",
     -- 派遣部队
     army_assign = "army.assign",
+    -- 联盟列表
+    union_list = "union.list",
+    -- 联盟信息
+    union_info = "union.info",
+    -- 联盟成员
+    union_member = "union.member",
+    -- 联盟申请
+    union_join = "union.join",
+    -- 联盟退出
+    union_exit = "union.exit",
+    -- 联盟申请通知
+    unionApply_push = "unionApply.push",
+    -- 创建联盟
+    union_create = "union.create",
 }

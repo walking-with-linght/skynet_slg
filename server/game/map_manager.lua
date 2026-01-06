@@ -1601,6 +1601,103 @@ function CMD.load()
     print("map_manager load success")
 end
 
+
+-- 建筑半径
+function CMD.CellRadius(x,y)
+    local key = posKey(x,y)
+
+    if cityByPos[key] then
+        return 1
+    end
+    local build = buildByPos[key]
+    if not build then
+        return
+    end
+    if build.type == BuildType.SystemCity then
+        if build.level >= 8 then
+            return 3
+        elseif build.level >= 5 then
+            return 2
+        else
+            return 1
+        end
+    else
+        return 0
+    end
+end
+
+-- 获取角色的联盟信息（优先从城市获取，如果没有则查询角色属性表）
+local function getRoleUnionInfo(rid)
+    -- 优先从城市获取联盟信息
+    local cities = CMD.getCitiesByRid(rid)
+    if cities and #cities > 0 then
+        local city = cities[1]  -- 使用第一个城市
+        return city.union_id or 0, city.parent_id or 0  -- 返回 union_id, parent_id
+    end
+    
+    -- 如果没有城市，从角色属性表获取 parent_id
+    local ok, attr = skynet.call(".mysql", "lua", "select_one_by_key", 
+        "tb_role_attribute_1", "rid", rid)
+    if ok and attr then
+        local parentId = attr.parent_id or 0
+        return 0, parentId  -- 返回 union_id=0, parent_id
+    end
+    
+    return 0, 0
+end
+
+-- 是否能到达该点
+function CMD.IsCanArrive(role, x, y)
+    local radius = CMD.CellRadius(x, y) or 0
+    local unionId = role.union_id or 0
+    local rid = role.rid or 0
+    
+    -- 查找10格半径内的建筑和城市
+    for tx = x - 10, x + 10 do
+        for ty = y - 10, y + 10 do
+            -- 检查建筑
+            local build = CMD.getBuildByPos(tx, ty)
+            if build then
+                local absX = math.abs(x - tx)
+                local absY = math.abs(y - ty)
+                local buildRadius = CMD.CellRadius(tx, ty) or 0
+                
+                if absX <= radius + buildRadius + 1 and absY <= radius + buildRadius + 1 then
+                    local buildRid = build.rid or 0
+                    -- 获取建筑的联盟信息
+                    local buildUnionId, buildParentId = getRoleUnionInfo(buildRid)
+                    
+                    -- 检查是否是同一个玩家或同一联盟
+                    if buildRid == rid or (unionId ~= 0 and (unionId == buildUnionId or unionId == buildParentId)) then
+                        return true
+                    end
+                end
+            end
+            
+            -- 检查城市
+            local city = CMD.getCityByPos(tx, ty)
+            if city then
+                local absX = math.abs(x - tx)
+                local absY = math.abs(y - ty)
+                local cityRadius = CMD.CellRadius(tx, ty) or 0
+                
+                if absX <= radius + cityRadius + 1 and absY <= radius + cityRadius + 1 then
+                    local cityRid = city.rid or 0
+                    local cityUnionId = city.union_id or 0
+                    local cityParentId = city.parent_id or 0
+                    
+                    -- 检查是否是同一个玩家或同一联盟
+                    if cityRid == rid or (unionId ~= 0 and (unionId == cityUnionId or unionId == cityParentId)) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    
+    return false
+end
+
 -- 服务启动
 skynet.init(function()
     CMD.load()

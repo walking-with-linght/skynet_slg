@@ -206,7 +206,7 @@ function CMD.select_by_conditions( tablename, condition, orders, offset, limit)
 	if orders then
 		local orderstr = " order by "
 		for field,sort in pairs(orders) do
-			orderstr = orderstr .. field .. " " .. sort
+			orderstr = orderstr .. field .. " " .. sort .. " "
 		end
 		sql = sql .. orderstr
 	end

@@ -26,6 +26,7 @@ local ld = base.LocalData(NM,{
 	db = {
 		rid = "int",
 		parent_id = "int",
+		union_id = "int",
 		collect_times = "int",
 		pos_tags = "json",
 		last_collect_time = "timestamp",
@@ -71,7 +72,13 @@ skynet.init(function ()
 	event:register("enter",lf.enter)
 	event:register("leave",lf.leave)
 	event:register("save", lf.save)
+	event:register("union_create", lf.union_create)
 end)
+
+function lf.union_create(self, union_data)
+	self.attr.union_id = union_data.id
+	lf.save(self, NM)
+end
 
 function PUBLIC.updateRoleAttr(self, attr_map)
 	for k,v in pairs(attr_map or {}) do
